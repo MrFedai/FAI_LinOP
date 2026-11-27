@@ -61,7 +61,8 @@ wizard (all questions up front) -> plan (every package, file, setting, service; 
   -> apply + verify each action -> report from real results -> reboot prompt only if needed
 ```
 
-- **Dry run** (`linop plan`): read-only probes run, every change is only recorded. GNOME monitor changes are checked by Mutter itself ("verify" mode).
+- **Dry run** (`linop plan`, `-n`): read-only probes run, every change is only shown; no file is written (no profile, journal or state). GNOME monitor changes are checked by Mutter itself ("verify" mode).
+- **Runs as your user** (D15): every command that changes or writes files refuses to run as root; only single commands are elevated through sudo.
 - **Journal**: `~/.local/state/linop/runs/<run>/journal.jsonl` — drives `linop resume` and `linop rollback`.
 - **Rollback**: files, GNOME settings and the GNOME monitor layout are restored (each item reported, failures marked FAILED); installed packages are listed, never "rolled back" silently.
 
@@ -75,11 +76,11 @@ wizard (all questions up front) -> plan (every package, file, setting, service; 
 | `linop plan` / `linop apply` | dry run / apply the saved profile |
 | `linop wizard` | answer the questions, save the profile |
 | `linop resume` | continue an interrupted or failed run |
-| `linop rollback [RUN]` | restore files + dconf changed by a run |
+| `linop rollback [RUN]` | restore files, dconf and the GNOME monitor layout changed by a run (default: the latest real run; dry runs and rollbacks are never `latest`) |
 | `linop runs` | list runs |
 | `linop profile init\|show\|validate\|path` | documented profile template, effective values, checks |
 | `linop display show\|capture` | monitors, best modes; save the current layout into the profile |
-| `linop dotfiles diff\|capture` | compare deployed dotfiles with the repo; copy them back |
+| `linop dotfiles diff\|capture` | compare deployed dotfiles with the repo; copy them back (diff shown, one confirmation, repo file backed up first) |
 | `linop reset [--uninstall] [--gnome]` | Smart Factory Reset (backup first, typed `CLEAN`) |
 | `linop doctor` | detected OS, GPU, disk, kernels, snapshot tool |
 
