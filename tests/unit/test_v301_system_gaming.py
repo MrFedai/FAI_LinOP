@@ -106,3 +106,26 @@ def test_no_notice_without_nvidia(tmp_path, monkeypatch):
     actions = gaming_actions(monkeypatch, ctx, ["mesa", "vulkan-radeon"])
     assert not any(isinstance(a, NvidiaRebootNotice) for a in actions)
     assert not any(a.reboot for a in actions if not isinstance(a, UbuntuNvidia))
+
+
+class _HW:
+    gpu_vendors = ["nvidia"]
+
+
+def _nvidia_build(tmp_path, monkeypatch, os_info):
+    ctx = ctx_for(tmp_path, "", os_info)
+    monkeypatch.setattr(gaming, "hardware", lambda _ctx: _HW())
+    monkeypatch.setattr(gaming, "gpu_packages", lambda _ctx, _hw: ([], [], []))
+    gaming.build(ctx)
+    return ctx
+
+
+def test_ubuntu_nvidia_requests_ubuntu_drivers_common(tmp_path, monkeypatch):
+    from test_phase5 import UBUNTU
+    ctx = _nvidia_build(tmp_path, monkeypatch, UBUNTU)
+    assert "ubuntu-drivers-common" in ctx.facts["package_ids"]
+
+
+def test_debian_nvidia_does_not_request_ubuntu_drivers_common(tmp_path, monkeypatch):
+    ctx = _nvidia_build(tmp_path, monkeypatch, DEBIAN)
+    assert "ubuntu-drivers-common" not in ctx.facts["package_ids"]

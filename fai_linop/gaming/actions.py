@@ -59,8 +59,12 @@ class UbuntuNvidia(Action):
     id, title, risk, reversible = "gaming.ubuntu-drivers", "Ubuntu: install the recommended NVIDIA driver", Risk.MEDIUM, Reversible.PARTIAL
     reboot = True
 
+    @staticmethod
+    def wanted(ctx) -> bool:
+        return ctx.os.id == "ubuntu" and "nvidia" in hardware(ctx).gpu_vendors
+
     def plan(self, ctx):
-        if ctx.os.id != "ubuntu" or "nvidia" not in hardware(ctx).gpu_vendors:
+        if not self.wanted(ctx):
             return []
         return [Change("package", "ubuntu-drivers install", "recommended driver")]
 
@@ -117,6 +121,8 @@ def build(ctx: Context):
                     ctx.home / ".config" / "gamemode.ini", lambda c: GAMEMODE_INI)
     # v2.5 wrote ~/.config/gamemode/gamemode.ini, which GameMode never reads (D-08)
     actions = [ini, GamemodeGroup(), UbuntuNvidia()]
+    if UbuntuNvidia.wanted(ctx):
+        request(ctx, ids=["ubuntu-drivers-common"])  # provides `ubuntu-drivers`
     nvidia = [i for i in ids if i.startswith("nvidia")]  # Arch: catalog ids are the native names
     if nvidia:
         actions.append(NvidiaRebootNotice(nvidia))

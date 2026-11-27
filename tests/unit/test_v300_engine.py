@@ -91,6 +91,8 @@ def test_dry_run_of_security_and_terminal_without_tools_has_no_failed_rows(tmp_p
     ctx = app.read_only_context(profile)
     ctx.facts["usbguard_confirmed"] = True
     ctx.facts["blackarch_confirmed"] = True
+    from fai_linop.package.resolve import Resolution
+    ctx.facts["packages"] = Resolution(native=["starship"])  # preset is planned only when starship is (to be) installed
     from fai_linop.security.actions import BlackArchRepo, UsbGuard
     from fai_linop.terminal.actions import StarshipPreset
     plan = build_plan(ctx, [UsbGuard(), StarshipPreset(), BlackArchRepo()])

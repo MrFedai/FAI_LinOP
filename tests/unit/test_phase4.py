@@ -241,7 +241,7 @@ def test_every_v25_package_is_kept_or_removed():
 
 def test_every_catalog_entry_has_a_source():
     for e in cat.load().values():
-        assert e.arch or e.debian or e.fedora or e.flatpak, e.id
+        assert e.arch or e.debian or e.ubuntu or e.fedora or e.flatpak, e.id
 
 
 # ---- providers & resolution -------------------------------------------------------------

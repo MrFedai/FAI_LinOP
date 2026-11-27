@@ -921,3 +921,18 @@ arch = "wl-clipboard"
 debian = "wl-clipboard"
 fedora = "wl-clipboard"
 description = "Wayland clipboard"
+
+[pkg.util-linux-user]
+groups = []
+arch = ""
+debian = ""
+fedora = "util-linux-user"
+description = "chsh (Fedora ships it outside util-linux)"
+
+[pkg.ubuntu-drivers-common]
+groups = []
+arch = ""
+debian = ""
+ubuntu = "ubuntu-drivers-common"
+fedora = ""
+description = "ubuntu-drivers (NVIDIA driver installer)"

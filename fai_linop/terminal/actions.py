@@ -6,6 +6,7 @@ kitten, Alacritty themes are imported (alacritty.toml is never overwritten)."""
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -17,7 +18,7 @@ import tomlkit
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
 from fai_linop.core.common import WriteFile, read_text
 from fai_linop.core.paths import current_user
-from fai_linop.package.actions import request
+from fai_linop.package.actions import request, resolution
 
 # pinned 2026-09-24 (git ls-remote HEAD); update deliberately
 PINS = {
@@ -201,6 +202,19 @@ class Zshrc(WriteFile):
         return super().plan(ctx)
 
 
+def starship_planned(ctx) -> bool:
+    """Starship is installed or will be installed in this run (V301 2.4)."""
+    res = resolution(ctx)
+    return any("starship" in group for group in (res.installed, res.native, res.aur, res.deferred))
+
+
+def starship_present(ctx) -> bool:
+    """Apply-time check; a dry run installs nothing, so it trusts the plan."""
+    if ctx.dry_run:
+        return True
+    return ctx.runner.run(["sh", "-c", "command -v starship"], mutating=False, check=False).ok
+
+
 class ShellInitLine(WriteFile):
     """Append `starship init` to ~/.bashrc or fish config (idempotent)."""
 
@@ -218,28 +232,70 @@ class ShellInitLine(WriteFile):
 
     def plan(self, ctx):
         self.path = ctx.home / self.rel
+        if not starship_planned(ctx):
+            return [Change("warning", "starship", "starship unavailable — prompt line not written")]
         return super().plan(ctx)
+
+    def apply(self, ctx):
+        self.path = ctx.home / self.rel
+        if not starship_planned(ctx):
+            return
+        if not starship_present(ctx):
+            ctx.ui.warn("starship command not found — prompt line not written")
+            return
+        super().apply(ctx)
+
+    def verify(self, ctx):
+        if not starship_planned(ctx) or not starship_present(ctx):
+            return True  # deliberately skipped
+        return super().verify(ctx)
 
 
 class StarshipPreset(Action):
     id, title, risk, reversible = "shell.starship-preset", "Starship preset (~/.config/starship.toml)", Risk.LOW, Reversible.YES
     requires = ("packages.native",)
 
+    @staticmethod
+    def _state(ctx) -> Path:
+        return ctx.home / ".local" / "state" / "linop" / "starship-preset.sha256"
+
+    def _user_edited(self, ctx) -> bool:
+        """True when starship.toml exists and differs from what FAI_LinOP last wrote."""
+        target = ctx.home / ".config" / "starship.toml"
+        if not target.exists():
+            return False
+        last = read_text(self._state(ctx))
+        return last is None or last.strip() != hashlib.sha256(target.read_bytes()).hexdigest()
+
     def plan(self, ctx):
         preset = ctx.profile.get("shell", "starship_preset")
         if not preset or ctx.profile.get("shell", "name") not in ("fish", "bash"):
+            return []
+        if not starship_planned(ctx):
+            return []  # the init-line action already warns
+        if self._user_edited(ctx):
+            ctx.ui.info("kept user's starship.toml")
             return []
         return [Change("file", "~/.config/starship.toml", f"preset {preset} (backup kept)")]
 
     def apply(self, ctx):
         preset = ctx.profile.get("shell", "starship_preset")
+        if not starship_planned(ctx) or self._user_edited(ctx):
+            return
         if ctx.dry_run:  # starship may not be installed yet: record "would run" only
             ctx.runner.run(["starship", "preset", preset, "-o", "~/.config/starship.toml"])
+            return
+        if not starship_present(ctx):
+            ctx.ui.warn("starship command not found — preset not written")
             return
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "starship.toml"
             ctx.runner.run(["starship", "preset", preset, "-o", str(out)], mutating=False)
-            ctx.files.write(ctx.home / ".config" / "starship.toml", out.read_bytes())
+            data = out.read_bytes()
+            ctx.files.write(ctx.home / ".config" / "starship.toml", data)
+        state = self._state(ctx)
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(hashlib.sha256(data).hexdigest() + "\n")
 
 
 class ChangeShell(Action):
@@ -302,7 +358,8 @@ def build_shell(ctx: Context):
     name = ctx.profile.get("shell", "name")
     if name == "none":
         return []
-    request(ctx, ids=["font-jetbrains-nerd", name] + (["starship"] if name in ("fish", "bash") else []))
+    chsh_ids = ["util-linux-user"] if os.path.basename(ChangeShell.login_shell(ctx)) != name else []  # Fedora: chsh
+    request(ctx, ids=["font-jetbrains-nerd", name, *chsh_ids] + (["starship"] if name in ("fish", "bash") else []))
     if name == "zsh":
         return [OhMyZsh(), Zshrc(), ChangeShell()]
     return [ShellInitLine(name), StarshipPreset(), ChangeShell()]

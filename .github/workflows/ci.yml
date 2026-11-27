@@ -46,7 +46,7 @@ jobs:
           case "${{ matrix.image }}" in
             archlinux*) pacman -Syu --noconfirm --needed git python python-pip sudo dconf dbus zsh ;;
             debian*|ubuntu*) apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip sudo dconf-cli dconf-service dbus zsh ;;
-            fedora*) dnf install -y git python3 python3-pip sudo dconf dbus-daemon zsh util-linux-user ;;
+            fedora*) dnf install -y git python3 python3-pip sudo dconf dbus-daemon zsh ;;
           esac
       - uses: actions/checkout@v7
       - name: install uv
