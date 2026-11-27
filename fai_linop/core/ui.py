@@ -49,7 +49,7 @@ class UI:
         """`wizard=True`: with --yes the question's default (the profile value) is
         used instead of an automatic yes, so -y never switches modules on."""
         if self.assume_yes:
-            return True
+            return default if wizard else True
         if not self.interactive:
             return default
         suffix = "[Y/n]" if default else "[y/N]"
