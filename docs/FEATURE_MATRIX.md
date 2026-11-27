@@ -45,7 +45,7 @@ Source of feature IDs: `docs/AUDIT.md` §2. Update this file in every phase.
 | F34 | enable libvirtd / AnyDesk services after install | system/actions.py (EnableService) | NOT MIGRATED → v3.1.0 3.7 | yes | NOT MIGRATED | NOT MIGRATED | NOT MIGRATED | NOT MIGRATED | stub | stub |
 | F35 | interactive choice of terminal theme, zsh theme, Starship preset, GPU, cache cleanup, custom package file | core/wizard.py | NOT MIGRATED (profile-only today) → v3.1.0 3.10 | n/a | NOT MIGRATED | NOT MIGRATED | NOT MIGRATED | NOT MIGRATED | stub | stub |
 | F36 | firejail `firecfg` | — | N-A (dead code in v2.5, `legacy/v2.5/setup.sh` 1569-1572) | n/a | N-A | N-A | N-A | N-A | N-A | N-A |
-| N1 | monitor mode detection + layout (D13) | display/* | new | yes | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
+| N1 | monitor mode detection + layout (D13); rollback re-applies the previous GNOME layout | display/* | new | yes (GNOME, via Mutter) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | N2 | dotfile capture / diff (D10) | dotfiles/manager.py (capture, diff) | new | yes | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | N3 | wizard → summary → single confirm, saved answers (D14) | core/wizard.py, core/profile.py | new | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | N4 | dry-run for every action | core/runner.py | new | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
@@ -62,5 +62,7 @@ Source of feature IDs: `docs/AUDIT.md` §2. Update this file in every phase.
 | 1.7 / 1.8 | first backup of a file is never overwritten; unreadable root files are backed up via sudo; rollback survives partial failures and reports honestly (D6) | N5 |
 | 1.10 | protected packages use each distro's own names (D19) | F10 |
 | 1.12 | root refusal covers every file-writing sub-command (D15) | N3 |
+| 1.9 | positions kept (only monitors right of a resized one move); twin monitors get distinct identities; GNOME-captured layout maps to the right Hyprland `desc:`; rollback re-applies the `display_before` layout through Mutter and reports FAILED otherwise (D13 / D6) | N1 |
+| 1.13 | this matrix: gaps marked PARTIAL with their v3.1.0 item, missing v2.5 rows added | all |
 
 Gaps against v2.5 are tracked in the v3.1.0 list (items 3.1–3.11) and named per row above.

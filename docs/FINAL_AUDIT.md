@@ -2,6 +2,8 @@
 
 > Audited under the former name "ArCoN v3". The project was renamed on 2026-11-27 (CLAUDE.md D29); commands below use the new name `linop`. After the rename, CI run 46033064904 (commit `29386b2`) passed: lint, unit, and the distro jobs (catalog check, dry run, real apply + rollback) in archlinux, debian:stable, ubuntu:24.04 and fedora containers. Nothing native was re-tested; every NOT TESTED / PARTIAL verdict below stands.
 
+> **v3.0.0 re-check (2026-11-27).** A second review (V300 list, 13 items) fixed: dotfile capture without diff/backup, dry runs that wrote files, `-y` enabling opt-in sections, planning errors counted as success, overwritten first backups, rollback that stopped at the first failure or skipped the monitor layout, reset protecting Arch names only, file-writing sub-commands allowed as root, monitor layout/identity bugs. Local `pytest` on `71738dc`: 197 passed, 3 skipped (UNIT). Verdicts below are unchanged in level: nothing new ran natively or in a VM. Gaps against v2.5 are listed per feature in `docs/FEATURE_MATRIX.md` (PARTIAL → v3.1.0).
+
 Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths tested) · **NOT TESTED** (implemented, never executed for real) · **FAIL**.
 "Container" never validates GPU, monitors, a real desktop session or hardware.
 
@@ -21,7 +23,7 @@ Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths teste
 | System upgrade / multilib / mirrors / keyring reset | PARTIAL | UNIT | text transforms tested; commands never executed |
 | GNOME settings (F17) | PASS | INTEGRATION | real dconf database via dbus-run-session; rollback restores |
 | GNOME debloat (F18) | PARTIAL | UNIT | |
-| Display D13 — GNOME | PARTIAL | UNIT (fake Mutter) | **no live Mutter session** — first native run must be `linop plan` (Mutter verify mode) |
+| Display D13 — GNOME | PARTIAL | UNIT (fake Mutter) | **no live Mutter session** — first native run must be `linop plan` (Mutter verify mode); v3.0.0: positions kept, twin monitors distinct, rollback re-applies the layout (fake Mutter only) |
 | Display D13 — Hyprland | PARTIAL | UNIT | `desc:` matching not checked on real Hyprland |
 | Gaming / GPU drivers (F19) | PARTIAL | UNIT | package selection per GPU tested; no driver installed anywhere |
 | Dotfiles deploy/diff/capture (F23, N2) | PASS | INTEGRATION | Terminator config deployed byte-identical in the real run |

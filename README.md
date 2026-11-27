@@ -5,7 +5,7 @@
 [![CI](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml/badge.svg)](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Status](https://img.shields.io/badge/v3-development-orange)
+![Status](https://img.shields.io/badge/v3.0.0-native%20test%20pending-yellow)
 
 ## Install — one line
 
@@ -22,7 +22,7 @@ git clone https://github.com/MrFedai/FAI_LinOP.git ~/FAI_LinOP && ~/FAI_LinOP/se
 | see what would change first (nothing is modified) | `~/FAI_LinOP/setup.sh plan` |
 | use the owner's profile | `~/FAI_LinOP/setup.sh --profile ~/FAI_LinOP/profiles/mrfedai.toml` |
 | update FAI_LinOP | `git -C ~/FAI_LinOP pull` |
-| undo the file changes of the last run | `~/FAI_LinOP/setup.sh rollback` |
+| undo the file and monitor-layout changes of the last run | `~/FAI_LinOP/setup.sh rollback` |
 
 ## What is FAI_LinOP?
 
@@ -63,7 +63,7 @@ wizard (all questions up front) -> plan (every package, file, setting, service; 
 
 - **Dry run** (`linop plan`): read-only probes run, every change is only recorded. GNOME monitor changes are checked by Mutter itself ("verify" mode).
 - **Journal**: `~/.local/state/linop/runs/<run>/journal.jsonl` — drives `linop resume` and `linop rollback`.
-- **Rollback**: files and GNOME settings are restored exactly; installed packages are listed, never "rolled back" silently.
+- **Rollback**: files, GNOME settings and the GNOME monitor layout are restored (each item reported, failures marked FAILED); installed packages are listed, never "rolled back" silently.
 
 ## Commands
 

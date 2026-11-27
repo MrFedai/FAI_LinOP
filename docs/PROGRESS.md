@@ -103,3 +103,12 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Evidence:** local `pytest`: 132 passed, 3 skipped (UNIT, Ubuntu 26.04). CI run 46033064904 on `29386b2`: lint, unit, distro × {archlinux, debian:stable, ubuntu:24.04, fedora} all `success` (INTEGRATION, container). GitHub repository renamed to `MrFedai/FAI_LinOP` by the owner; fast-forwarded into `main` and pushed.
 - **NOT tested:** native run on the owner's Arch machine; `setup.sh` one-line install under the new name (CI only ShellChecks it).
 - **Deviations:** D18 text changed (marker names, colours file name) — by owner instruction, recorded in D29.
+
+## v3.0.0 hardening (V300 list, 2026-11-27) · commits `42c7400`…`71738dc`
+
+- **Done:** 13 items from the pre-release review: 1.2/1.11 dotfile capture + deploy diff (`8a5e110`), 1.3/1.12 dry run writes nothing, root refusal per sub-command (`42c7400`), 1.4 `-y` keeps wizard defaults (`fdd3501`), 1.5/1.6 planning errors fail, dry run without tools (`69db002`), 1.7/1.8/1.10 backups, rollback, protected names (`e105e31`), 1.9 monitors + display rollback (`71738dc`), 1.13 feature matrix (`fc60f9a`). Version 3.0.0, CHANGELOG, README, TESTING, FINAL_AUDIT updated.
+- **Evidence:** local `pytest` on `71738dc`: 197 passed, 3 skipped (UNIT). Lint (compileall + `bash -n`) green.
+- **NOT tested:** native run on the owner's Arch machine (FINAL_AUDIT checklist); live Mutter / Hyprland for the new display code; GitHub CI on the release commit (runs on push).
+- **Risks:** display rollback of runs recorded before `71738dc` reports FAILED (no modes recorded) and asks for a manual fix; Hyprland live path without a profile layout still lines monitors up left to right.
+- **Deviations:** none. Owner decision 0096: rollback re-applies the monitor layout (instead of declaring the action irreversible).
+- **Questions for the owner:** none.

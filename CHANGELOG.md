@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.0.0 — unreleased (branch `v3-dev`)
+## v3.0.0: ArCoN v2.5 rewritten in Python as FAI_LinOP (2026-11-27)
 
 Complete rewrite of the 1885-line ArCoN v2.5 Bash script in Python 3.11+ (`linop`). v2.5 stays in `legacy/v2.5/` and at tag `v2.5.0`.
 
@@ -27,6 +27,15 @@ Complete rewrite of the 1885-line ArCoN v2.5 Bash script in Python 3.11+ (`linop
 - Factory reset deleted `~/.config/<package>` for every package (incl. browser/editor data) and ignored the protected list.
 - `curl | sh` installers, BlackArch without checksum and with `--overwrite '*'`, SSH edited with `sed` and no validation, UFW enabled before allowing SSH, `/etc/os-release` sourced.
 - Final summary printed success unconditionally.
+
+### Hardened before release (V300 review)
+- `linop dotfiles capture` shows the diff, asks once, writes byte-exact with a backup and a journal entry; `deploy` plans show the diff (D10).
+- A dry run writes no file at all (profile, journal, state); `-y` keeps wizard defaults, opt-in sections stay off.
+- A planning error is a failure (exit ≠ 0, journal `run_end`); a dry run reports "would run" when a tool is missing; the BlackArch confirmation is part of the plan.
+- Backups: the first backup of a file is never overwritten; root-only files are backed up through sudo. Rollback reports every item and keeps going after a failure (D6).
+- Monitors (D13): positions are kept (only monitors right of a resized one move), twin monitors no longer collide, a GNOME-captured layout maps to the right Hyprland `desc:`, and `linop rollback` re-applies the previous GNOME layout through Mutter (FAILED line when it cannot).
+- Factory reset protects packages by each distro's own names (D19); root refusal covers every file-writing sub-command (D15).
+- `docs/FEATURE_MATRIX.md`: features with gaps against v2.5 are marked PARTIAL with their v3.1.0 item.
 
 ### Removed
 - Third-party Hyprland theme installers (Ax-Shell, Hyprdots/HyDE, ML4W, JaKooLit) — deferred to v3.1.
