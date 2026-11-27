@@ -121,3 +121,11 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Risks:** the apt "old index" threshold (1 day, ctime) is a heuristic — a false "old" only defers names; without a built AUR helper a misspelt name can still trigger the helper build; Fedora `dnf repoquery` may download metadata at plan time.
 - **Deviations:** none. Owner decision (27.11): plan-time-unknown sources are deferred, planning stays side-effect free.
 - **Questions for the owner:** none.
+
+## v3.0.2 Fedora chsh fix (2026-11-27) · commit `bd06ba6`
+
+- **Done:** catalog `util-linux-user` → Fedora package `util-linux` (Fedora 45 ships `chsh` there; `util-linux-user` is only a provide that `dnf repoquery` does not list). Version 3.0.2, CHANGELOG, TESTING, FINAL_AUDIT, README badge.
+- **Evidence:** CI run 46047856714 on the v3.0.1 tag: fedora job failed (`util-linux-user | MISSING`, login shell stayed `/bin/bash`). CI run 46048542414 on `bd06ba6`: all six jobs green. Local `pytest`: 240 passed, 3 skipped.
+- **NOT tested:** Fedora 44 and older; native run on the owner's Arch machine.
+- **Deviations:** none.
+- **Questions for the owner:** none.

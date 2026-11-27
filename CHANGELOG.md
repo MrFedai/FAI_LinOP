@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## v3.0.2: Fedora login shell fix (2026-11-27)
 
 ### Fixed
 - Fedora: `chsh` comes from `util-linux` (catalog id `util-linux-user`). On Fedora 45 `util-linux-user` is only a provide of `util-linux`, so the v3.0.1 catalog check reported it missing and the login shell was not changed (CI fedora job red on the v3.0.1 tag).
+
+### Test status
+UNIT: 240 passed, 3 skipped (local `pytest`). INTEGRATION (container): GitHub CI run 46048542414 on `bd06ba6` — lint, unit, archlinux, debian:stable, ubuntu:24.04, fedora (45) all green. Fedora 44 and older NOT TESTED (`chsh` may still live in a separate `util-linux-user` there). NATIVE: NOT TESTED.
 
 ## v3.0.1: packages resolved in install order, safer shell and cleanup (2026-11-27)
 

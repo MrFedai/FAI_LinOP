@@ -6,6 +6,8 @@
 
 > **v3.0.1 (2026-11-27).** V301 review, 8 items: package sources the plan cannot know are deferred and resolved at apply (D22), Zsh plugins load and half clones are re-cloned, Alacritty import is valid TOML, Starship init/preset respect what is installed and what the user edited, cache purge and orphan removal are honest (simulated first), one `pacman -Syu`, NVIDIA reboot notice on the right action, distro prerequisites from the catalog. Local `pytest` on `2912fcd`: 240 passed, 3 skipped (UNIT). Verdict levels unchanged: nothing ran natively or in a VM.
 
+> **v3.0.2 (2026-11-27).** The v3.0.1 tag failed the CI fedora job: `util-linux-user` is only a provide of `util-linux` on Fedora 45, so the catalog check skipped it and `chsh` was missing. The catalog now names `util-linux`; CI run 46048542414 on `bd06ba6` is green on all four containers (INTEGRATION). Fedora 44 and older: NOT TESTED.
+
 Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths tested) · **NOT TESTED** (implemented, never executed for real) · **FAIL**.
 "Container" never validates GPU, monitors, a real desktop session or hardware.
 

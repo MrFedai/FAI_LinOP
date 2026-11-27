@@ -54,11 +54,11 @@ Expected on Arch in a root container: the AUR actions fail (makepkg refuses root
 
 **One-line install** (`git clone … ~/FAI_LinOP && ~/FAI_LinOP/setup.sh`; tested before the rename as `~/ArCoN-v3` / `arcon`, NOT re-run under the new name): run as a normal sudo user on a fresh Ubuntu 24.04 minbase rootfs (debootstrap + chroot, no python3): `setup.sh` installed python3 + python3-venv, uv, and started `linop` (`--version`, `doctor`, `plan` OK). Arch/Fedora path (uv from pacman/dnf): NOT TESTED.
 
-## Test status by level (2026-11-27, v3.0.1)
+## Test status by level (2026-11-27, v3.0.2)
 
 | Level | What actually ran |
 |---|---|
-| UNIT | 240 tests pass, 3 skipped (`uv run pytest`, commit `2912fcd`, v3.0.1; v3.0.0: 197 on `71738dc`; skipped: 2 Arch characterization scenarios need root + unshare, 1 opt-in real-run test). Display rollback (Mutter restore) runs against a fake Mutter only |
+| UNIT | 240 tests pass, 3 skipped (`uv run pytest`, commit `bd06ba6`, v3.0.2; GitHub CI run 46048542414 green on all 4 distro containers; v3.0.0: 197 on `71738dc`; skipped: 2 Arch characterization scenarios need root + unshare, 1 opt-in real-run test). Display rollback (Mutter restore) runs against a fake Mutter only |
 | INTEGRATION (container) | characterization of v2.5 (Ubuntu + Arch via mount namespace, mocked tools); real apply/rollback on Ubuntu 24.04; real dconf load; catalog check on Ubuntu 24.04 |
 | VM | none |
 | NATIVE | none — first native run: the owner's Arch machine (see docs/FINAL_AUDIT.md, "native checklist") |
