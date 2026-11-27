@@ -16,6 +16,22 @@ PACMAN_CONF = Path("/etc/pacman.conf")
 MIRRORLIST = Path("/etc/pacman.d/mirrorlist")
 
 
+BLACKARCH_KEY = "4345771566D76030457303332944B067D796237B"   # v2.5 setup.sh 1044, 342-377
+
+
+def disable_blackarch(conf: str) -> str:
+    """Comment out the active [blackarch] section (its header and its own lines only)."""
+    out, in_section = [], False
+    for line in conf.splitlines(keepends=True):
+        stripped = line.strip()
+        if re.match(r"^\[blackarch\]$", stripped):
+            in_section = True
+        elif stripped.startswith("["):
+            in_section = False
+        out.append("#" + line if in_section and stripped and not stripped.startswith("#") else line)
+    return "".join(out)
+
+
 class KeyringReset(Action):
     id, title = "system.keyring-reset", "Arch: reset the pacman keyring (v2.5 behaviour, opt-in)"
     risk, reversible = Risk.HIGH, Reversible.NO
@@ -26,9 +42,24 @@ class KeyringReset(Action):
         return [Change("command", "/etc/pacman.d/gnupg", "delete and re-initialise the keyring")]
 
     def apply(self, ctx):
-        ctx.runner.run(["rm", "-rf", "/etc/pacman.d/gnupg"], sudo=True)
-        ctx.runner.run(["pacman-key", "--init"], sudo=True)
-        ctx.runner.run(["pacman-key", "--populate", "archlinux"], sudo=True)
+        # v2.5 (342-346, 371-377): a [blackarch] section that cannot be verified blocks the
+        # keyring rebuild, so it is switched off for the rebuild and switched on afterwards,
+        # also when the rebuild fails. pacman.conf goes through FileChanger (backup + journal).
+        original = read_text(PACMAN_CONF) or ""
+        disabled = disable_blackarch(original)
+        toggled = disabled != original
+        if toggled:
+            ctx.files.write(PACMAN_CONF, disabled.encode(), root=True, mode=0o644)
+        try:
+            ctx.runner.run(["rm", "-rf", "/etc/pacman.d/gnupg"], sudo=True)
+            ctx.runner.run(["pacman-key", "--init"], sudo=True)
+            ctx.runner.run(["pacman-key", "--populate", "archlinux"], sudo=True)
+        finally:
+            if toggled:
+                ctx.files.write(PACMAN_CONF, original.encode(), root=True, mode=0o644)
+        if toggled:
+            # the rebuilt keyring lost the BlackArch key: trust it again (best effort, as v2.5)
+            ctx.runner.run(["pacman-key", "--lsign-key", BLACKARCH_KEY], sudo=True, check=False)
 
 
 def enable_multilib(conf: str) -> str:
@@ -50,7 +81,11 @@ def enable_multilib(conf: str) -> str:
 
 
 def multilib_needed(ctx: Context) -> bool:
-    return ctx.os.family is Family.ARCH and ctx.profile.enabled("gaming")
+    if ctx.os.family is not Family.ARCH:
+        return False
+    # BlackArch tools need 32-bit libraries too (v2.5 999-1005): any non-removal mode
+    blackarch = ctx.profile.enabled("blackarch") and ctx.profile.get("blackarch", "install") != "remove"
+    return ctx.profile.enabled("gaming") or blackarch
 
 
 class Multilib(WriteFile):

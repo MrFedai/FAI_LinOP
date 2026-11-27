@@ -13,6 +13,7 @@ from fai_linop.core.action import Action, Change, Context, Reversible, Risk, reg
 from fai_linop.core.common import EnableService, WriteFile, read_text
 from fai_linop.package.actions import request
 from fai_linop.platform.detect import Family
+from fai_linop.system.actions import BLACKARCH_KEY
 
 SYSCTL = """# FAI_LinOP security hardening (v2.5 set, CLAUDE.md D23)
 kernel.dmesg_restrict = 1
@@ -27,6 +28,7 @@ net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.default.accept_source_route = 0
 net.ipv6.conf.all.accept_redirects = 0
 """
+SYSCTL_PATH = Path("/etc/sysctl.d/99-linop-security.conf")
 SSHD_DIR = Path("/etc/ssh/sshd_config.d")
 SSHD_DROPIN = SSHD_DIR / "10-linop.conf"
 
@@ -163,6 +165,89 @@ class Scans(Action):
         ctx.ui.info(f"scan reports: {out}")
 
 
+CLAMAV_DB_DIR = Path("/var/lib/clamav")
+RKHUNTER_DB = Path("/var/lib/rkhunter/db/rkhunter.dat")
+AUTOSTART_SRC = Path("/usr/share/applications/opensnitch_ui.desktop")
+
+
+class ClamavFirstUpdate(Action):
+    """One `freshclam` before the update service starts (v2.5 1557-1562). Idempotent: runs only
+    while no signature database (daily.cvd / daily.cld) exists yet."""
+    id, title, risk, reversible = "security.clamav-db", "ClamAV: first signature download (freshclam)", Risk.LOW, Reversible.NO
+    requires = ("packages.native",)
+
+    def plan(self, ctx):
+        if not _on(ctx, "tools") or any(CLAMAV_DB_DIR.glob("daily.c[lv]d")):
+            return []
+        return [Change("command", "freshclam", "first signature download before the update service starts")]
+
+    def apply(self, ctx):
+        # the update daemon holds the log file; stop it for the manual run (v2.5 1559)
+        ctx.runner.run(["systemctl", "stop", "clamav-freshclam"], sudo=True, check=False)
+        if not ctx.runner.run(["freshclam"], sudo=True, check=False, timeout=1800).ok:
+            ctx.ui.warn("security: freshclam failed (no network?) - the update service will retry")
+
+
+class RkhunterBaseline(Action):
+    """`rkhunter --propupd` after installation (v2.5 1564-1567). Idempotent: only while the
+    file-properties database does not exist yet, so a later run never blesses changed files."""
+    id, title, risk, reversible = "security.rkhunter-propupd", "rkhunter: record the file-properties baseline", Risk.LOW, Reversible.NO
+    requires = ("packages.native",)
+
+    def plan(self, ctx):
+        if RKHUNTER_DB.exists():
+            return []
+        return [Change("command", "rkhunter --propupd", "baseline of system file properties (first install only)")]
+
+    def apply(self, ctx):
+        ctx.runner.run(["rkhunter", "--propupd"], sudo=True, check=False)
+
+
+class OpensnitchAutostart(Action):
+    """Copy opensnitch_ui.desktop to ~/.config/autostart (v2.5 1760-1761), backup + journal (D10)."""
+    id, title, risk, reversible = "security.opensnitch-autostart", "OpenSnitch UI: start at login", Risk.LOW, Reversible.YES
+    requires = ("packages.native",)
+
+    @staticmethod
+    def _dest(ctx) -> Path:
+        return ctx.home / ".config" / "autostart" / AUTOSTART_SRC.name
+
+    def plan(self, ctx):
+        if not _on(ctx, "opensnitch"):
+            return []
+        src, dest = read_text(AUTOSTART_SRC), read_text(self._dest(ctx))
+        # packages are not installed at plan time: no source yet still means "will copy"
+        if dest is not None and (src is None or src == dest):
+            return []
+        return [Change("file", str(self._dest(ctx)), "create" if dest is None else "update (backup kept)")]
+
+    def apply(self, ctx):
+        src = read_text(AUTOSTART_SRC)
+        if src is None:
+            if not ctx.dry_run:
+                ctx.ui.warn(f"security: {AUTOSTART_SRC} not found - OpenSnitch UI autostart skipped")
+            return
+        ctx.files.write(self._dest(ctx), src.encode(), mode=0o644)
+
+
+def security_rows(runner, family: Family, sysctl: Path | None = None, sshd: Path | None = None) -> list[tuple[str, str]]:
+    """Read-only security summary for `linop doctor` (v2.5 dashboard 1583-1594): only
+    mutating=False commands and file-existence checks."""
+    def active(unit: str) -> str:
+        return runner.run(["systemctl", "is-active", unit], mutating=False, check=False).stdout.strip() or "unknown"
+
+    def present(path: Path) -> str:
+        return "present" if path.exists() else "absent"
+
+    firewall = "firewalld" if family is Family.FEDORA else "ufw"
+    return [("Firewall", f"{firewall}: {active(firewall)}"),
+            ("Sysctl hardening", present(sysctl or SYSCTL_PATH)),
+            ("SSH drop-in", present(sshd or SSHD_DROPIN)),
+            ("ClamAV updates", f"clamav-freshclam: {active('clamav-freshclam')}"),
+            ("OpenSnitch", f"opensnitchd: {active('opensnitchd')}"),
+            ("USBGuard", f"usbguard: {active('usbguard')}")]
+
+
 def _sysctl(ctx):
     ctx.runner.run(["sysctl", "--system"], sudo=True)
 
@@ -184,14 +269,19 @@ def build(ctx: Context):
     request(ctx, ids=ids)
     actions = []
     if _on(ctx, "tools"):
-        actions.append(EnableService("security.freshclam", "clamav-freshclam", "ClamAV signature updates"))
+        freshclam = EnableService("security.freshclam", "clamav-freshclam", "ClamAV signature updates")
+        freshclam.requires = ("security.clamav-db",)
+        actions += [ClamavFirstUpdate(), freshclam]
+    if _on(ctx, "tools") or _on(ctx, "scans"):
+        actions.append(RkhunterBaseline())
     if _on(ctx, "sysctl"):
         actions.append(WriteFile("security.sysctl", "Kernel/network hardening (sysctl)",
-                                 Path("/etc/sysctl.d/99-linop-security.conf"), lambda c: SYSCTL, root=True,
+                                 SYSCTL_PATH, lambda c: SYSCTL, root=True,
                                  mode=0o644, risk=Risk.MEDIUM, after=_sysctl))
     actions += [Firewall(), SshDropIn(), UsbGuard()]
     if _on(ctx, "opensnitch"):
-        actions.append(EnableService("security.opensnitch", "opensnitchd", "OpenSnitch application firewall"))
+        actions += [EnableService("security.opensnitch", "opensnitchd", "OpenSnitch application firewall"),
+                    OpensnitchAutostart()]
     actions.append(Scans())
     return actions
 
@@ -199,6 +289,7 @@ def build(ctx: Context):
 # ---- BlackArch (Arch only) --------------------------------------------------------------
 
 STRAP_URL = "https://blackarch.org/strap.sh"
+BLACKARCH_PREREQ = ["jdk17-openjdk", "jdk11-openjdk", "rust", "opencl-mesa"]
 CORE_GROUPS = ["blackarch-webapp", "blackarch-networking", "blackarch-wireless"]
 
 
@@ -268,12 +359,14 @@ class BlackArchRemove(Action):
     def plan(self, ctx):
         if ctx.profile.get("blackarch", "install") != "remove" or not blackarch_enabled():
             return []
-        return [Change("repo", "blackarch", "remove from /etc/pacman.conf (backup kept); installed tools stay")]
+        return [Change("repo", "blackarch", "remove from /etc/pacman.conf (backup kept) and delete its pacman key; installed tools stay")]
 
     def apply(self, ctx):
         conf = read_text(Path("/etc/pacman.conf")) or ""
         new = re.sub(r"^\[blackarch\]\n(?:(?!\[).*\n)*", "", conf, flags=re.M)
         ctx.files.write(Path("/etc/pacman.conf"), new.encode(), root=True, mode=0o644)
+        # v2.5 1044-1054: the repository key goes too (an absent key is not an error)
+        ctx.runner.run(["pacman-key", "--delete", BLACKARCH_KEY], sudo=True, check=False)
         ctx.runner.run(["pacman", "-Syu", "--noconfirm"], sudo=True, interactive=True)
 
 
@@ -282,4 +375,7 @@ def build_blackarch(ctx: Context):
     if ctx.os.family is not Family.ARCH:
         ctx.ui.warn("blackarch: Arch only — use the `cyber` package group on this distro")
         return []
+    if ctx.profile.get("blackarch", "install") == "full":
+        # v2.5 996: provider-lock prerequisites; names come from the catalog, never guessed
+        request(ctx, ids=BLACKARCH_PREREQ)
     return [BlackArchRepo(), BlackArchTools(), BlackArchRemove()]

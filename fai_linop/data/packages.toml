@@ -936,3 +936,31 @@ debian = ""
 ubuntu = "ubuntu-drivers-common"
 fedora = ""
 description = "ubuntu-drivers (NVIDIA driver installer)"
+
+[pkg.jdk17-openjdk]
+groups = ["blackarch"]
+arch = "jdk17-openjdk"
+debian = ""
+fedora = ""
+description = "OpenJDK 17 (BlackArch prerequisite)"
+
+[pkg.jdk11-openjdk]
+groups = ["blackarch"]
+arch = "jdk11-openjdk"
+debian = ""
+fedora = ""
+description = "OpenJDK 11 (BlackArch prerequisite)"
+
+[pkg.rust]
+groups = ["blackarch"]
+arch = "rust"
+debian = ""
+fedora = ""
+description = "Rust toolchain (BlackArch prerequisite)"
+
+[pkg.opencl-mesa]
+groups = ["blackarch"]
+arch = "opencl-mesa"
+debian = ""
+fedora = ""
+description = "OpenCL for Mesa (BlackArch prerequisite)"

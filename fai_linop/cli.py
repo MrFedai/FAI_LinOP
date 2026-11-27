@@ -398,6 +398,10 @@ class App:
             hw_rows = [("GPU", gpus), ("CPU", hw.cpu_vendor), ("RAM", f"{hw.ram_mb} MiB"),
                        ("Root disk", {True: "HDD", False: "SSD/NVMe", None: "unknown"}[hw.root_rotational]),
                        ("Kernels", ", ".join(hw.kernels) or "unknown"), ("Virtualization", hw.virtualization)]
+        sec_rows = []
+        if self.os.is_linux:
+            from fai_linop.security.actions import security_rows
+            sec_rows = security_rows(self.runner, self.os.family)
         self.ui.table("FAI_LinOP doctor", ("Item", "Value"), [
             ("FAI_LinOP", __version__),
             ("OS", f"{self.os.name} (id={self.os.id or '-'}, family={self.os.family.value})"),
@@ -406,6 +410,7 @@ class App:
             ("Profile", str(self.profile_path)),
             ("State dir", str(self.paths.state)),
             ("Snapshot tool", provider.name if provider else "none (per-file backups)"),
+            *sec_rows,
         ])
         return EXIT_OK
 
