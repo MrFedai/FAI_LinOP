@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.0.1: packages resolved in install order, safer shell and cleanup (2026-11-27)
+
+Bug-fix release from the V301 review (8 items). No new features; no owner dotfile changed (D8).
+
+### Fixed
+- **Packages (D22):** a name whose source the plan cannot know without side effects — Arch multilib enabled by this run, an empty or old apt index, an AUR helper not built yet — is shown as `deferred: resolved at apply` and resolved again at apply time in D22 order (repo → AUR → Flatpak → reported). Planning never syncs a database. The AUR helper is built only when a package really needs it; names found nowhere fall back to Flatpak instead of breaking the whole yay transaction.
+- **Zsh:** `plugins=(…)` is written before `source …oh-my-zsh.sh`, so autosuggestions and syntax highlighting load. Oh-My-Zsh and plugins are cloned into a temporary directory and moved into place; a half-made clone counts as missing on the next run; `verify()` checks them.
+- **Alacritty:** the theme is added to `general.import` with `tomlkit` (valid TOML, comments and order kept, no duplicate key).
+- **Starship:** the `starship init` line is written only when Starship is installed or will be (otherwise the plan says "unavailable"); the preset no longer overwrites a `starship.toml` the user edited.
+- **Cleanup:** `purge` really empties the package cache and `verify()` checks it; apt/dnf orphans and GNOME debloat removals are simulated first and listed by name; debloat stops when the simulation would remove extra packages.
+- **System update:** one `pacman -Syu` transaction (no partial sync); an unknown distro family is reported instead of skipped silently.
+- **NVIDIA:** the reboot notice belongs to the driver action that needs it.
+- **Prerequisites:** `util-linux-user` (Fedora `chsh`) and `ubuntu-drivers-common` (Ubuntu NVIDIA) come from the package catalog; CI no longer installs `util-linux-user` by hand.
+
+### Test status
+UNIT: 240 passed, 3 skipped (local `pytest`, commit `2912fcd`). INTEGRATION (container) runs on GitHub CI after push. NATIVE: NOT TESTED.
+
 ## v3.0.0: ArCoN v2.5 rewritten in Python as FAI_LinOP (2026-11-27)
 
 Complete rewrite of the 1885-line ArCoN v2.5 Bash script in Python 3.11+ (`linop`). v2.5 stays in `legacy/v2.5/` and at tag `v2.5.0`.

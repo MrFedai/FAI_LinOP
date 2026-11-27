@@ -112,3 +112,12 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Risks:** display rollback of runs recorded before `71738dc` reports FAILED (no modes recorded) and asks for a manual fix; Hyprland live path without a profile layout still lines monitors up left to right.
 - **Deviations:** none. Owner decision 0096: rollback re-applies the monitor layout (instead of declaring the action irreversible).
 - **Questions for the owner:** none.
+
+## v3.0.1 fixes (V301 list, 2026-11-27) · commits `d771f59`…`2912fcd`
+
+- **Done:** 8 items from the V301 review: 2.7 single `pacman -Syu` + unknown family reported, 2.8 NVIDIA reboot notice on the driver action (`d771f59`); 2.5 honest cache purge, simulated orphan/debloat removal (`f4cb193`, `9d8c29f`); 2.1 Zsh plugin order, clone via temp dir + `verify()`, 2.3 Alacritty import via tomlkit (`94a954d`); 2.2 deferred package resolution at apply, D22 order (`5d1c67a`); 2.4 Starship init/preset, 2.6 `util-linux-user` / `ubuntu-drivers-common` from the catalog (`111fad9`, `2912fcd`). Version 3.0.1, CHANGELOG, TESTING, FINAL_AUDIT, FEATURE_MATRIX, README badge.
+- **Evidence:** local `pytest` on `2912fcd`: 240 passed, 3 skipped (UNIT). Lint (compileall + `bash -n`) green per task.
+- **NOT tested:** GitHub CI distro matrix on these commits (runs on push; the Fedora job now relies on the catalog for `util-linux-user`); native run on the owner's Arch machine; multilib / apt-update deferral against real package databases.
+- **Risks:** the apt "old index" threshold (1 day, ctime) is a heuristic — a false "old" only defers names; without a built AUR helper a misspelt name can still trigger the helper build; Fedora `dnf repoquery` may download metadata at plan time.
+- **Deviations:** none. Owner decision (27.11): plan-time-unknown sources are deferred, planning stays side-effect free.
+- **Questions for the owner:** none.

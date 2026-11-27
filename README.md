@@ -5,7 +5,7 @@
 [![CI](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml/badge.svg)](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Status](https://img.shields.io/badge/v3.0.0-native%20test%20pending-yellow)
+![Status](https://img.shields.io/badge/v3.0.1-native%20test%20pending-yellow)
 
 ## Install — one line
 

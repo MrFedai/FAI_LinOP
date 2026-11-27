@@ -4,6 +4,8 @@
 
 > **v3.0.0 re-check (2026-11-27).** A second review (V300 list, 13 items) fixed: dotfile capture without diff/backup, dry runs that wrote files, `-y` enabling opt-in sections, planning errors counted as success, overwritten first backups, rollback that stopped at the first failure or skipped the monitor layout, reset protecting Arch names only, file-writing sub-commands allowed as root, monitor layout/identity bugs. Local `pytest` on `71738dc`: 197 passed, 3 skipped (UNIT). Verdicts below are unchanged in level: nothing new ran natively or in a VM. Gaps against v2.5 are listed per feature in `docs/FEATURE_MATRIX.md` (PARTIAL → v3.1.0).
 
+> **v3.0.1 (2026-11-27).** V301 review, 8 items: package sources the plan cannot know are deferred and resolved at apply (D22), Zsh plugins load and half clones are re-cloned, Alacritty import is valid TOML, Starship init/preset respect what is installed and what the user edited, cache purge and orphan removal are honest (simulated first), one `pacman -Syu`, NVIDIA reboot notice on the right action, distro prerequisites from the catalog. Local `pytest` on `2912fcd`: 240 passed, 3 skipped (UNIT). Verdict levels unchanged: nothing ran natively or in a VM.
+
 Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths tested) · **NOT TESTED** (implemented, never executed for real) · **FAIL**.
 "Container" never validates GPU, monitors, a real desktop session or hardware.
 
