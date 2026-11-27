@@ -4,6 +4,7 @@ format; only the D18 substitutions are applied (checked by rules.check)."""
 from __future__ import annotations
 
 import difflib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -11,6 +12,13 @@ from typing import Callable
 from fai_linop.core.action import Change, Context, Reversible, Risk, register
 from fai_linop.core.common import WriteFile, read_text
 from fai_linop.dotfiles import rules
+
+log = logging.getLogger("fai_linop.dotfiles")
+
+# 1.11: the summary shows at most this many changed lines per dotfile; the full
+# diff goes to the run's log file (and to the screen with -v).
+SHORT_DIFF_LINES = 12
+SHORT_DIFF_WIDTH = 120
 
 
 @dataclass(frozen=True)
@@ -64,7 +72,45 @@ class DeployDotfile(WriteFile):
         problems = rules.check(self.dotfile.kind, source, self.content(ctx), ctx.profile.get("profile", "name"))
         if problems:  # never deploy something that breaks D8/D18
             raise RuntimeError(f"{self.dotfile.name}: rendered file violates D18: {problems[:3]}")
-        return super().plan(ctx)
+        changes = super().plan(ctx)
+        old = read_text(self.path)
+        if not changes or old is None:
+            return changes
+        # 1.11 (D10): an overwritten dotfile shows its diff in the summary.
+        full = unified(old, self.content(ctx), f"live:~/{self.dotfile.target}",
+                       f"repo:{self.dotfile.source} (rendered)")
+        log.info("diff for %s:\n%s", self.path, full)
+        return [Change("file", str(self.path), "update (backup kept)" + summary_diff(full))]
+
+
+def unified(old: str | bytes, new: str | bytes, old_label: str, new_label: str) -> str:
+    """Unified diff of two texts. Bytes are shown as UTF-8 (undecodable bytes
+    replaced, for display only); line endings stay part of each line."""
+    def lines(x: str | bytes) -> list[str]:
+        return (x.decode("utf-8", "replace") if isinstance(x, bytes) else x).splitlines(True)
+    out = []
+    for line in difflib.unified_diff(lines(old), lines(new), old_label, new_label):
+        out.append(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n")
+    return "".join(out)
+
+
+def summary_diff(full: str) -> str:
+    """The changed lines of `full` for the plan table, shortened unless -v.
+    Escaped, because the plan table renders rich markup ("[section]" lines)."""
+    from rich.markup import escape
+    changed = [line.rstrip("\r\n") for line in full.splitlines(True)
+               if line[:1] in ("+", "-") and not line.startswith(("+++ ", "--- "))]
+    if not changed:
+        return ""
+    if log.isEnabledFor(logging.DEBUG):     # -v: the whole diff
+        shown, rest = changed, 0
+    else:
+        shown, rest = changed[:SHORT_DIFF_LINES], len(changed) - SHORT_DIFF_LINES
+        shown = [s if len(s) <= SHORT_DIFF_WIDTH else s[:SHORT_DIFF_WIDTH] + "…" for s in shown]
+    text = "".join(f"\n{escape(s)}" for s in shown)
+    if rest > 0:
+        text += f"\n… {rest} more changed line(s) — full diff with -v and in the run's log file"
+    return text
 
 
 def diff(ctx: Context, d: Dotfile) -> str:
@@ -76,30 +122,54 @@ def diff(ctx: Context, d: Dotfile) -> str:
                                         f"repo:{d.source} (rendered)", f"live:~/{d.target}"))
 
 
-def capture(ctx: Context, d: Dotfile) -> bool:
-    """Copy the live file back into the repo (D11: the owner refreshes the source).
+def captured(ctx: Context, d: Dotfile) -> bytes | None:
+    """The bytes `capture` would write into the repo, or None when the live file
+    is missing or already equal to the repo file (1.2: byte level, CRLF kept).
     Generated parts are not captured: hyprland's monitor block is replaced by the
     repo's own monitor lines, hyprlock keeps the Ax-Shell source line."""
-    live = read_text(ctx.home / d.target)
-    if live is None:
+    try:
+        live = (ctx.home / d.target).read_bytes()
+    except OSError:
+        return None
+    source = (ctx.repo_root / d.source).read_bytes()
+    if d.kind in ("hyprland", "hyprlock"):
+        text = live.decode("utf-8", "surrogateescape")
+        if d.kind == "hyprland":
+            src = source.decode("utf-8", "surrogateescape")
+            original = "".join(line for line in src.splitlines(True) if rules._MONITOR_LINE.match(line))
+            block = _block_of(text)
+            text = text.replace(block, original) if block else text
+        else:
+            text = text.replace(rules.LINOP_SOURCE, rules.AXSHELL_SOURCE, 1)
+        live = text.encode("utf-8", "surrogateescape")
+    return None if live == source else live
+
+
+def capture_diff(ctx: Context, d: Dotfile, new: bytes) -> str:
+    return unified((ctx.repo_root / d.source).read_bytes(), new, f"repo:{d.source}", f"captured:~/{d.target}")
+
+
+def capture(ctx: Context, d: Dotfile) -> bool:
+    """Copy the live file back into the repo (D11: the owner refreshes the source)
+    through FileChanger: the old repo file is backed up and journalled (D10)."""
+    new = captured(ctx, d)
+    if new is None:
         return False
-    source_path = ctx.repo_root / d.source
-    source = source_path.read_text()
-    if d.kind == "hyprland":
-        original_monitors = "".join(l for l in source.splitlines(True) if rules._MONITOR_LINE.match(l))
-        live = live.replace(_block_of(live), original_monitors) if _block_of(live) else live
-    elif d.kind == "hyprlock":
-        live = live.replace(rules.LINOP_SOURCE, rules.AXSHELL_SOURCE, 1)
-    if live == source:
-        return False
-    source_path.write_text(live)
-    return True
+    return ctx.files.write(ctx.repo_root / d.source, new)
 
 
 def _block_of(text: str) -> str:
+    """The generated monitor block including its line ending (LF or CRLF)."""
     start = text.find(rules.MONITOR_BEGIN)
     end = text.find(rules.MONITOR_END)
-    return text[start:end + len(rules.MONITOR_END) + 1] if start != -1 and end != -1 else ""
+    if start == -1 or end == -1:
+        return ""
+    end += len(rules.MONITOR_END)
+    if text.startswith("\r\n", end):
+        end += 2
+    elif text.startswith("\n", end):
+        end += 1
+    return text[start:end]
 
 
 @register("dotfiles", "Dotfiles", order=60)

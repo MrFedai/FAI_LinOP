@@ -294,27 +294,44 @@ class App:
         return EXIT_OK
 
     def cmd_dotfiles(self) -> int:
-        from fai_linop.dotfiles.manager import DOTFILES, capture, diff
+        from fai_linop.dotfiles.manager import DOTFILES, capture_diff, captured, diff
+        profile = self.load_profile()
+        ctx = self.read_only_context(profile)      # computing diffs writes nothing
+        wanted = [d for d in DOTFILES if profile.enabled(d.module)]
         if self.args.what == "diff":
-            ctx = self.read_only_context(self.load_profile())
-        elif self.runner.dry_run:
-            self.ui.info("dry run: `dotfiles capture` writes nothing — see the differences with `linop dotfiles diff`.")
-            return EXIT_OK
-        else:
-            journal = Journal.create(self.paths.runs, latest=False, command="dotfiles capture")
-            ctx = self.context(self.load_profile(), journal)
-        profile = ctx.profile
-        for d in DOTFILES:
-            if not profile.enabled(d.module):
-                continue
-            if self.args.what == "diff":
+            for d in wanted:
                 text = diff(ctx, d)
                 self.ui.console.print(text or f"{d.target}: in sync", markup=False, highlight=False)
-            elif capture(ctx, d):
-                self.ui.ok(f"captured ~/{d.target} -> {d.source}")
-        if self.args.what == "capture":
-            self.ui.info("GNOME settings are captured with `dconf dump` by hand for now; review with git diff.")
-            self.ui.warn("tests/golden/sources.sha256 will fail until you approve the new files (by design, D8).")
+            return EXIT_OK
+        # capture (1.2, D10): every file's diff first, one confirmation, then
+        # byte-exact writes through FileChanger (backup + journal); -n stops after the diffs.
+        changes = []
+        for d in wanted:
+            new = captured(ctx, d)
+            if new is None:
+                live = "in sync with " + d.source if (ctx.home / d.target).exists() else "not deployed"
+                self.ui.info(f"~/{d.target}: {live} — nothing to capture")
+                continue
+            self.ui.console.print(capture_diff(ctx, d, new), markup=False, highlight=False)
+            changes.append((d, new))
+        if not changes:
+            self.ui.ok("Nothing to capture — the repo already matches the live files.")
+            return EXIT_OK
+        if self.runner.dry_run:
+            self.ui.info(f"dry run: {len(changes)} file(s) would be captured into the repo — nothing written.")
+            return EXIT_OK
+        if not self.ui.confirm(f"Write these {len(changes)} file(s) into the repo (old versions backed up)?"):
+            self.ui.info("Cancelled — nothing was changed.")
+            return EXIT_OK
+        journal = Journal.create(self.paths.runs, latest=False, command="dotfiles capture")
+        ctx = self.context(profile, journal)
+        for d, new in changes:
+            ctx.files.write(self.repo_root / d.source, new)
+            self.ui.ok(f"captured ~/{d.target} -> {d.source}")
+        journal.write("run_end", summary={"captured": [d.source for d, _ in changes]})
+        self.ui.info(f"Old repo files backed up under {journal.backup_dir} (journal: {journal.path}).")
+        self.ui.info("GNOME settings are captured with `dconf dump` by hand for now; review with git diff.")
+        self.ui.warn("tests/golden/sources.sha256 will fail until you approve the new files (by design, D8).")
         return EXIT_OK
 
     def cmd_reset(self) -> int:
