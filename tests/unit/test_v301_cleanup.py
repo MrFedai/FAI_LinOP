@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from test_phase5 import ARCH, DEBIAN, UBUNTU, ctx_for
 
-from fai_linop.core.runner import FakeRunner
+from fai_linop.core.runner import FakeRunner, Result
 from fai_linop.desktop.gnome import Debloat
 from fai_linop.optimization import actions as opt
 from fai_linop.optimization.actions import Cache, Orphans
@@ -99,6 +99,33 @@ def test_debloat_stops_when_simulation_takes_metapackage(tmp_path):
     plan = d.plan(ctx)
     assert any(c.target == "ubuntu-desktop" for c in plan)  # warning line
     with pytest.raises(RuntimeError, match="ubuntu-desktop"):
+        d.apply(ctx)
+    assert not any("remove" in c and "-y" in c for c in runner.calls)
+
+
+def test_dnf_simulation_runs_with_sudo(tmp_path):
+    runner = FakeRunner().on("dnf", "autoremove", result=DNF_SIM)
+    ctx = ctx_for(tmp_path, "[cleanup]\norphans = true\n", os_info=FEDORA, runner=runner)
+    Orphans().plan(ctx)
+    assert runner.calls[0] == ("sudo", "--", "dnf", "autoremove", "--assumeno")
+
+
+def test_orphans_simulation_failure_removes_nothing(tmp_path):
+    runner = FakeRunner().on("dnf", "autoremove",
+                             result=Result(("dnf",), 1, "", "This command has to be run with superuser privileges"))
+    ctx = ctx_for(tmp_path, "[cleanup]\norphans = true\n", os_info=FEDORA, runner=runner)
+    a = Orphans()
+    plan = a.plan(ctx)
+    assert [(c.kind, c.target) for c in plan] == [("warning", "orphans")]
+    a.apply(ctx)
+    assert not any("remove" in c for c in runner.calls)
+
+
+def test_debloat_stops_when_simulation_fails(tmp_path):
+    ctx, runner = _debloat_ctx(tmp_path, Result(("apt-get",), 100, "", "E: broken"))
+    d = Debloat()
+    assert d.plan(ctx)[-1].kind == "warning"
+    with pytest.raises(RuntimeError, match="could not simulate"):
         d.apply(ctx)
     assert not any("remove" in c and "-y" in c for c in runner.calls)
 

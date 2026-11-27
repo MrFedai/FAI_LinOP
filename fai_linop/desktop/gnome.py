@@ -107,19 +107,25 @@ class Debloat(Action):
             return []
         self._present = sorted(native_for(ctx.os, ctx.runner).installed(BLOAT))  # exact names (v2.5 used a regex)
         changes = [Change("package-remove", n) for n in self._present]
-        for extra in self._extras(ctx):
+        extras = self._extras(ctx)
+        if extras is None:
+            changes.append(Change("warning", "debloat", "could not simulate removal — action will stop"))
+        for extra in extras or []:
             changes.append(Change("warning", extra, "would ALSO be removed (not in the bloat list) — action will stop"))
         return changes
 
-    def _extras(self, ctx) -> list[str]:
+    def _extras(self, ctx) -> list[str] | None:
         """apt/dnf resolve removals through dependencies: a metapackage (ubuntu-desktop) or its
         dependents can go too. Anything beyond the requested names is reported, not removed."""
         if not self._present or ctx.os.family is Family.ARCH:
             return []
-        return [n for n in simulate_removal(ctx, self._present) if n not in self._present]
+        sim = simulate_removal(ctx, self._present)
+        return None if sim is None else [n for n in sim if n not in self._present]
 
     def apply(self, ctx):
         extras = self._extras(ctx)
+        if extras is None:
+            raise RuntimeError("could not simulate removal; debloat stopped")
         if extras:
             raise RuntimeError("debloat stopped: removal would also take packages outside the bloat list: "
                                + ", ".join(extras))

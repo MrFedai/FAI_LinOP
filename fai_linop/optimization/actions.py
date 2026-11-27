@@ -71,17 +71,26 @@ PACMAN_CACHE = Path("/var/cache/pacman/pkg")
 APT_CACHE = Path("/var/cache/apt/archives")
 
 
-def simulate_removal(ctx: Context, names: list[str] | None = None) -> list[str]:
+def simulate_removal(ctx: Context, names: list[str] | None = None) -> list[str] | None:
     """Packages a removal WOULD take (apt/dnf), from a read-only simulation. `names=None`
-    simulates `autoremove`. Arch is not simulated here (callers use `pacman -Qdtq`)."""
+    simulates `autoremove`. Returns None when the simulation itself failed (callers must not
+    treat that as "nothing to remove"). Arch is not simulated here (callers use `pacman -Qdtq`)."""
     r = ctx.runner
     if ctx.os.family is Family.DEBIAN:
         argv = ["apt-get", "--simulate", *(["remove", *names] if names is not None else ["autoremove"])]
-        out = r.run(argv, mutating=False, check=False).stdout
+        res = r.run(argv, mutating=False, check=False)
+        if res.returncode != 0:
+            return None
+        out = res.stdout
         found = [m.group(1) for m in re.finditer(r"^Remv\s+(\S+)", out, re.M)]
     elif ctx.os.family is Family.FEDORA:
         argv = ["dnf", *(["remove", *names] if names is not None else ["autoremove"]), "--assumeno"]
-        out = r.run(argv, mutating=False, check=False).stdout  # --assumeno exits non-zero by design
+        # dnf needs root even for --assumeno; --assumeno exits non-zero by design, so judge by output.
+        res = r.run(argv, sudo=True, mutating=False, check=False)
+        out = res.stdout
+        understood = any(k in out for k in ("Transaction Summary", "Nothing to do", "No packages marked"))
+        if not understood and res.returncode != 0:
+            return None
         found, section = [], False
         for line in out.splitlines():
             if line.startswith("Transaction Summary"):
@@ -98,7 +107,7 @@ def simulate_removal(ctx: Context, names: list[str] | None = None) -> list[str]:
 class Orphans(Action):
     id, title, risk, reversible = "cleanup.orphans", "Remove orphaned packages (list shown)", Risk.MEDIUM, Reversible.PARTIAL
 
-    def _list(self, ctx) -> list[str]:
+    def _list(self, ctx) -> list[str] | None:
         if ctx.os.family is Family.ARCH:
             return ctx.runner.run(["pacman", "-Qdtq"], mutating=False, check=False).stdout.split()
         return simulate_removal(ctx)
@@ -107,13 +116,15 @@ class Orphans(Action):
         if not ctx.profile.get("cleanup", "orphans"):
             return []
         self._names = self._list(ctx)
+        if self._names is None:
+            return [Change("warning", "orphans", "simulation failed: could not list orphans, nothing will be removed")]
         return [Change("package-remove", n, "orphan") for n in self._names]
 
     def apply(self, ctx):
-        names = getattr(self, "_names", None)
-        if names is None:
-            names = self._names = self._list(ctx)
-        if not names:
+        if not hasattr(self, "_names"):
+            self._names = self._list(ctx)
+        names = self._names
+        if not names:  # empty, or the simulation failed (None): remove nothing
             return
         ctx.journal.write("packages_removed", names=names)
         if ctx.os.family is Family.ARCH:
