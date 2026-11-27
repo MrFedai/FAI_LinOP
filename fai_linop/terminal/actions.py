@@ -12,6 +12,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import tomlkit
+
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
 from fai_linop.core.common import WriteFile, read_text
 from fai_linop.core.paths import current_user
@@ -28,14 +30,41 @@ ALACRITTY_THEME_URL = "https://raw.githubusercontent.com/alacritty/alacritty-the
 KITTY_THEMES = {"dracula": "Dracula", "nord": "Nord", "gruvbox_dark": "Gruvbox Dark", "tokyo_night": "Tokyo Night"}
 
 
+def _clear_incomplete(dest: Path) -> None:
+    """Remove leftovers of an earlier failed clone; anything with user files is moved aside, not deleted."""
+    if not dest.exists():
+        return
+    if all(e.name == ".git" for e in dest.iterdir()):
+        shutil.rmtree(dest)
+    else:
+        dest.rename(dest.with_name(dest.name + ".incomplete"))
+
+
+def _clone_complete(name: str, path: Path) -> bool:
+    if name == "ohmyzsh":
+        return (path / "oh-my-zsh.sh").is_file()
+    return path.is_dir() and any(e.name != ".git" for e in path.iterdir())
+
+
 def pinned_clone(ctx: Context, name: str, dest: Path) -> None:
     url, commit = PINS[name]
     r = ctx.runner
+    # clone into a temp dir next to dest and rename when done: a failed fetch never leaves `dest` half-made
+    tmp = dest.parent / f".{dest.name}.linop-tmp"
     if not ctx.dry_run:
         dest.parent.mkdir(parents=True, exist_ok=True)
-    r.run(["git", "init", "-q", str(dest)])
-    r.run(["git", "-C", str(dest), "fetch", "-q", "--depth", "1", url, commit], timeout=300)
-    r.run(["git", "-C", str(dest), "checkout", "-q", "FETCH_HEAD"])
+        shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        r.run(["git", "init", "-q", str(tmp)])
+        r.run(["git", "-C", str(tmp), "fetch", "-q", "--depth", "1", url, commit], timeout=300)
+        r.run(["git", "-C", str(tmp), "checkout", "-q", "FETCH_HEAD"])
+        if not ctx.dry_run and tmp.exists():
+            _clear_incomplete(dest)
+            tmp.rename(dest)
+    except BaseException:
+        if not ctx.dry_run:
+            shutil.rmtree(tmp, ignore_errors=True)
+        raise
     ctx.journal.write("git_clone", repo=url, commit=commit, path=str(dest))
 
 
@@ -85,16 +114,34 @@ class AlacrittyTheme(Action):
         url = ALACRITTY_THEME_URL.format(ctx.profile.get("terminal", "theme"))
         body = ctx.runner.run(["curl", "-fsSL", "--max-time", "30", url], mutating=False).stdout  # -f: no 404 page as config
         ctx.files.write(theme_file, body.encode())
-        text = read_text(conf) or ""
-        line = f'import = ["{theme_file}"]\n'
-        if "[general]" in text:
-            new = re.sub(r"^\[general\]\s*$", "[general]\n" + line.rstrip(), text, count=1, flags=re.M)
-        else:
-            new = "[general]\n" + line + "\n" + text
-        ctx.files.write(conf, new.encode())
+        ctx.files.write(conf, _alacritty_import(read_text(conf) or "", str(theme_file)).encode())
+
+
+def _alacritty_import(text: str, theme_path: str) -> str:
+    """Add theme_path to general.import with tomlkit (comments and order kept; no duplicate key)."""
+    doc = tomlkit.parse(text)
+    general = doc.get("general")
+    if general is None:
+        general = tomlkit.table()
+        doc["general"] = general
+    imports = general.get("import")
+    if imports is None:
+        imports = tomlkit.array()
+        general["import"] = imports
+    if theme_path not in [str(i) for i in imports]:
+        imports.append(theme_path)
+    return tomlkit.dumps(doc)
 
 
 # ---- shell ----------------------------------------------------------------------------
+
+def _insert_before_source(text: str, line: str) -> str:
+    """Put `line` before the `source …oh-my-zsh.sh` line (plugins load only if set before it)."""
+    m = re.search(r"^[ \t]*(?:source|\.)[ \t]+\S*oh-my-zsh\.sh.*$", text, re.M)
+    if m:
+        return text[:m.start()] + line + "\n" + text[m.start():]
+    return text + ("" if text.endswith("\n") or not text else "\n") + line + "\n"
+
 
 def _zshrc_edit(text: str, theme: str) -> str:
     theme_line = f'ZSH_THEME="{theme}"'
@@ -102,7 +149,7 @@ def _zshrc_edit(text: str, theme: str) -> str:
     text = re.sub(r"^ZSH_THEME=.*$", theme_line, text, flags=re.M) if re.search(r"^ZSH_THEME=", text, re.M) \
         else theme_line + "\n" + text
     text = re.sub(r"^plugins=\(.*?\)$", plugins_line, text, flags=re.M | re.S) if re.search(r"^plugins=\(", text, re.M) \
-        else text + plugins_line + "\n"
+        else _insert_before_source(text, plugins_line)
     return text
 
 
@@ -121,12 +168,15 @@ class OhMyZsh(Action):
 
     def plan(self, ctx):
         return [Change("command", f"git clone {PINS[n][0]}@{PINS[n][1][:10]}", str(p))
-                for n, p in self._targets(ctx).items() if not p.exists()]
+                for n, p in self._targets(ctx).items() if not _clone_complete(n, p)]
 
     def apply(self, ctx):
         for name, path in self._targets(ctx).items():
-            if not path.exists():
+            if not _clone_complete(name, path):
                 pinned_clone(ctx, name, path)
+
+    def verify(self, ctx):
+        return all(_clone_complete(n, p) for n, p in self._targets(ctx).items())
 
 
 class Zshrc(WriteFile):
