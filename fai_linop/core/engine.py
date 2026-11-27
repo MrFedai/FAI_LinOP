@@ -64,7 +64,7 @@ def size_summary(ctx: Context, plan: Plan) -> str | None:
     return "Size: " + "; ".join(parts)
 
 
-DEFERRED_NOTE ="deferred: runs only if needed, resolved at apply"
+DEFERRED_NOTE = "deferred: runs only if needed, resolved at apply"
 
 
 @dataclass
