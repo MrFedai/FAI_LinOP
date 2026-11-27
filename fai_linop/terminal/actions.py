@@ -183,6 +183,9 @@ class StarshipPreset(Action):
 
     def apply(self, ctx):
         preset = ctx.profile.get("shell", "starship_preset")
+        if ctx.dry_run:  # starship may not be installed yet: record "would run" only
+            ctx.runner.run(["starship", "preset", preset, "-o", "~/.config/starship.toml"])
+            return
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "starship.toml"
             ctx.runner.run(["starship", "preset", preset, "-o", str(out)], mutating=False)

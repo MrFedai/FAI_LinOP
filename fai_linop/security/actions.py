@@ -131,6 +131,9 @@ class UsbGuard(Action):
                 Change("service", "usbguard", "enable --now")]
 
     def apply(self, ctx):
+        if ctx.dry_run:  # the tool may not be installed yet: record "would run", never probe it
+            ctx.runner.run(["usbguard", "generate-policy"], sudo=True)
+            return
         policy = ctx.runner.run(["usbguard", "generate-policy"], sudo=True, mutating=False).stdout
         if not policy.strip():
             raise RuntimeError("usbguard generate-policy returned nothing — refusing to enable an empty policy")
@@ -209,18 +212,35 @@ class BlackArchRepo(Action):
     def plan(self, ctx):
         if ctx.profile.get("blackarch", "install") == "remove" or blackarch_enabled():
             return []
-        return [Change("repo", "blackarch", f"runs {STRAP_URL} as root after showing its SHA-256")]
+        # D14: the typed confirmation is asked up front (before the summary), never mid-run
+        if "blackarch_confirmed" not in ctx.facts:
+            fetched = ctx.runner.run(["curl", "-fsSL", "--max-time", "60", STRAP_URL], mutating=False, check=False)
+            digest = hashlib.sha256(fetched.stdout.encode()).hexdigest() if fetched.ok and fetched.stdout else ""
+            hint = (f"strap.sh SHA-256 {digest}. Compare it with blackarch.org/downloads." if digest
+                    else "strap.sh could not be fetched now (no network or no curl) — it is fetched again at apply time.")
+            ctx.facts["blackarch_digest"] = digest
+            ctx.facts["blackarch_confirmed"] = ctx.ui.typed_confirm(
+                f"BlackArch runs {STRAP_URL} as root (third-party, one-way). {hint}", "BLACKARCH")
+        if not ctx.facts["blackarch_confirmed"]:
+            ctx.ui.warn("blackarch: strap.sh not confirmed — skipped")
+            return []
+        return [Change("repo", "blackarch", f"runs {STRAP_URL} as root (SHA-256 checked against the confirmed one)")]
 
     def apply(self, ctx):
+        if ctx.dry_run:  # record "would run" only; no download in a dry run
+            ctx.runner.run(["sh", "strap.sh"], sudo=True)
+            return
+        if not ctx.facts.get("blackarch_confirmed"):
+            raise RuntimeError("BlackArch strap.sh not confirmed")
         with tempfile.TemporaryDirectory(prefix="linop-blackarch-") as tmp:
             script = Path(tmp) / "strap.sh"
             body = ctx.runner.run(["curl", "-fsSL", "--max-time", "60", STRAP_URL], mutating=False).stdout
             script.write_text(body)
             digest = hashlib.sha256(body.encode()).hexdigest()
             ctx.journal.write("third_party_script", url=STRAP_URL, sha256=digest)
-            if not ctx.ui.typed_confirm(f"strap.sh SHA-256 {digest}. Compare it with blackarch.org/downloads "
-                                        "before continuing.", "BLACKARCH"):
-                raise RuntimeError("BlackArch strap.sh not confirmed")
+            seen = ctx.facts.get("blackarch_digest")
+            if seen and seen != digest:
+                raise RuntimeError("strap.sh changed since it was confirmed — aborting")
             ctx.runner.run(["sh", str(script)], sudo=True, interactive=True)
 
 

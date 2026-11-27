@@ -31,7 +31,7 @@ from fai_linop.core.wizard import run_wizard
 from fai_linop.platform.detect import OSInfo, Tier, detect
 from fai_linop.recovery import snapshot
 from fai_linop.recovery.backup import FileChanger, restore_files
-from fai_linop.recovery.journal import DONE, Journal, NullJournal, list_runs
+from fai_linop.recovery.journal import DONE, FAILED, Journal, NullJournal, list_runs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_UNSUPPORTED = 0, 1, 2, 3
@@ -155,7 +155,13 @@ class App:
         modules.load()
         plan = build_plan(ctx, collect_actions(ctx), done)
         show_plan(ctx, plan)
+        planning_failed = [p for p in plan.items if p.status == "failed"]
         if not plan.pending:
+            if planning_failed:
+                for p in planning_failed:
+                    journal.write("action", id=p.action.id, status=FAILED, error=p.message)
+                journal.write("run_end", summary={"failed": len(planning_failed), "planning_failed": True})
+                return EXIT_FAILED
             journal.write("run_end", summary={"nothing_to_do": True})
             return EXIT_OK
         if not self.runner.dry_run:

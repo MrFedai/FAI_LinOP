@@ -7,7 +7,6 @@ import logging
 from dataclasses import dataclass, field
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, registered_modules
-from fai_linop.core.runner import CommandError
 from fai_linop.recovery.journal import DONE, FAILED, SKIPPED, STARTED
 
 log = logging.getLogger("fai_linop.engine")
@@ -62,8 +61,11 @@ def build_plan(ctx: Context, actions: list[Action], done: set[str] = frozenset()
             continue
         try:
             changes = action.plan(ctx)
-        except CommandError as exc:
-            plan.items.append(PlannedAction(action, [], "failed", f"planning failed: {exc}"))
+        except Exception as exc:  # any planning error (CommandError, OSError, KeyError…) is a failed row
+            log.exception("planning %s failed", action.id)
+            first = str(exc).splitlines()[0] if str(exc) else ""
+            detail = f"{type(exc).__name__}: {first}" if first else type(exc).__name__
+            plan.items.append(PlannedAction(action, [], "failed", f"planning failed: {detail}"))
             continue
         status = "pending" if changes else "skipped"
         plan.items.append(PlannedAction(action, changes, status, "" if changes else "already in the desired state"))
@@ -84,8 +86,14 @@ def show_plan(ctx: Context, plan: Plan) -> None:
                 c.target if c.kind in ("package", "flatpak") else f"{c.target} ({c.detail})" if c.detail else c.target)
         what = "\n".join(f"[bold]{k}[/bold] ({len(v)}): {', '.join(v)}" for k, v in groups.items())
         rows.append((p.action.module, p.action.title, what, p.action.risk.value, p.action.reversible.value))
+    failed = [p for p in plan.items if p.status == "failed"]
     if not rows:
-        ui.ok("Nothing to do — the system already matches the profile.")
+        if failed:
+            for p in failed:
+                ui.error(f"{p.action.title} ({p.action.id}): {p.message}")
+            ui.error(f"{len(failed)} action(s) could not be planned — fix the error(s) above.")
+        else:
+            ui.ok("Nothing to do — the system already matches the profile.")
         return
     ui.table("FAI_LinOP plan", ("Module", "Action", "Changes", "Risk", "Reversible"), rows)
     ui.info("Totals: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())))
@@ -94,6 +102,8 @@ def show_plan(ctx: Context, plan: Plan) -> None:
     for p in plan.pending:
         if p.action.risk is Risk.HIGH:
             ui.warn(f"HIGH RISK: {p.action.title}")
+    for p in failed:
+        ui.error(f"PLANNING FAILED: {p.action.title} ({p.action.id}): {p.message}")
     skipped = [p for p in plan.items if p.status in ("skipped", "done")]
     if skipped:
         ui.info(f"{len(skipped)} action(s) already satisfied")
