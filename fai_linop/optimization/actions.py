@@ -67,30 +67,61 @@ def build(ctx: Context):
     return actions
 
 
+PACMAN_CACHE = Path("/var/cache/pacman/pkg")
+APT_CACHE = Path("/var/cache/apt/archives")
+
+
+def simulate_removal(ctx: Context, names: list[str] | None = None) -> list[str]:
+    """Packages a removal WOULD take (apt/dnf), from a read-only simulation. `names=None`
+    simulates `autoremove`. Arch is not simulated here (callers use `pacman -Qdtq`)."""
+    r = ctx.runner
+    if ctx.os.family is Family.DEBIAN:
+        argv = ["apt-get", "--simulate", *(["remove", *names] if names is not None else ["autoremove"])]
+        out = r.run(argv, mutating=False, check=False).stdout
+        found = [m.group(1) for m in re.finditer(r"^Remv\s+(\S+)", out, re.M)]
+    elif ctx.os.family is Family.FEDORA:
+        argv = ["dnf", *(["remove", *names] if names is not None else ["autoremove"]), "--assumeno"]
+        out = r.run(argv, mutating=False, check=False).stdout  # --assumeno exits non-zero by design
+        found, section = [], False
+        for line in out.splitlines():
+            if line.startswith("Transaction Summary"):
+                break
+            if line.startswith("Removing"):
+                section = True
+            elif section and line.startswith(" ") and len(line.split()) >= 4:
+                found.append(line.split()[0])
+    else:
+        return []
+    return sorted(dict.fromkeys(found))
+
+
 class Orphans(Action):
     id, title, risk, reversible = "cleanup.orphans", "Remove orphaned packages (list shown)", Risk.MEDIUM, Reversible.PARTIAL
 
     def _list(self, ctx) -> list[str]:
         if ctx.os.family is Family.ARCH:
             return ctx.runner.run(["pacman", "-Qdtq"], mutating=False, check=False).stdout.split()
-        return []
+        return simulate_removal(ctx)
 
     def plan(self, ctx):
         if not ctx.profile.get("cleanup", "orphans"):
             return []
-        if ctx.os.family is Family.ARCH:
-            self._names = self._list(ctx)
-            return [Change("package-remove", n, "orphan") for n in self._names]
-        return [Change("command", "autoremove", "apt-get autoremove / dnf autoremove")]
+        self._names = self._list(ctx)
+        return [Change("package-remove", n, "orphan") for n in self._names]
 
     def apply(self, ctx):
+        names = getattr(self, "_names", None)
+        if names is None:
+            names = self._names = self._list(ctx)
+        if not names:
+            return
+        ctx.journal.write("packages_removed", names=names)
         if ctx.os.family is Family.ARCH:
-            ctx.journal.write("packages_removed", names=self._names)
-            ctx.runner.run(["pacman", "-Rns", "--noconfirm", *self._names], sudo=True, interactive=True)
+            ctx.runner.run(["pacman", "-Rns", "--noconfirm", *names], sudo=True, interactive=True)
         elif ctx.os.family is Family.DEBIAN:
-            ctx.runner.run(["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "autoremove", "-y"], sudo=True, interactive=True)
+            ctx.runner.run(["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "remove", "-y", *names], sudo=True, interactive=True)
         else:
-            ctx.runner.run(["dnf", "autoremove", "-y"], sudo=True, interactive=True)
+            ctx.runner.run(["dnf", "remove", "-y", *names], sudo=True, interactive=True)
 
 
 class Cache(Action):
@@ -114,11 +145,25 @@ class Cache(Action):
             if mode == "trim":
                 r.run(["paccache", "-rk2"], sudo=True)
             else:
-                r.run(["pacman", "-Scc", "--noconfirm"], sudo=True)
+                # -Scc asks twice (packages, then sync databases); --noconfirm answers the
+                # default "N", so nothing is deleted while the command still exits 0.
+                r.run(["pacman", "-Scc"], sudo=True, input="y\ny\n")
         elif ctx.os.family is Family.DEBIAN:
             r.run(["apt-get", "autoclean" if mode == "trim" else "clean"], sudo=True)
         else:
             r.run(["dnf", "clean", "packages" if mode == "trim" else "all"], sudo=True)
+
+    def verify(self, ctx):
+        if ctx.profile.get("cleanup", "cache") != "purge" or ctx.runner.dry_run:
+            # trim keeps versions on purpose: there is no fixed "empty" state to look at.
+            return True
+        if ctx.os.family is Family.ARCH:
+            return not any(PACMAN_CACHE.glob("*.pkg.tar.*"))
+        if ctx.os.family is Family.DEBIAN:
+            return not any(APT_CACHE.glob("*.deb"))
+        # dnf cache path differs by version (/var/cache/dnf vs libdnf5); `dnf clean all`
+        # failing already raised in run(), so there is nothing reliable left to inspect.
+        return True
 
 
 @register("cleanup", "Cleanup", order=95)

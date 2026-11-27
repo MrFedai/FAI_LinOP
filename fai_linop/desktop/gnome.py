@@ -10,7 +10,9 @@ import os
 from fai_linop.core.paths import current_user
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
 from fai_linop.dotfiles.rules import WALLPAPER_KEYS, WALLPAPER_SECTIONS
+from fai_linop.optimization.actions import simulate_removal
 from fai_linop.package.actions import request
+from fai_linop.platform.detect import Family
 from fai_linop.package.providers import native_for
 from fai_linop.recovery.backup import dconf_user
 
@@ -104,9 +106,23 @@ class Debloat(Action):
         if not ctx.profile.get("gnome", "debloat"):
             return []
         self._present = sorted(native_for(ctx.os, ctx.runner).installed(BLOAT))  # exact names (v2.5 used a regex)
-        return [Change("package-remove", n) for n in self._present]
+        changes = [Change("package-remove", n) for n in self._present]
+        for extra in self._extras(ctx):
+            changes.append(Change("warning", extra, "would ALSO be removed (not in the bloat list) — action will stop"))
+        return changes
+
+    def _extras(self, ctx) -> list[str]:
+        """apt/dnf resolve removals through dependencies: a metapackage (ubuntu-desktop) or its
+        dependents can go too. Anything beyond the requested names is reported, not removed."""
+        if not self._present or ctx.os.family is Family.ARCH:
+            return []
+        return [n for n in simulate_removal(ctx, self._present) if n not in self._present]
 
     def apply(self, ctx):
+        extras = self._extras(ctx)
+        if extras:
+            raise RuntimeError("debloat stopped: removal would also take packages outside the bloat list: "
+                               + ", ".join(extras))
         native_for(ctx.os, ctx.runner).remove(self._present)
         ctx.journal.write("packages_removed", names=self._present)
 
