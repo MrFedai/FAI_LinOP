@@ -5,14 +5,20 @@ apply time in D22 order (repo → AUR → Flatpak)."""
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
+from fai_linop.core.runner import CommandError
+from fai_linop.package.base import PackageManager
 from fai_linop.package.providers import Apt, AurHelper, Flatpak, Pacman, native_for
 from fai_linop.package.resolve import DEFERRED, Resolution, resolve, settle_aur, settle_repos, wanted_entries
 from fai_linop.platform.detect import Family
 from fai_linop.system.actions import Multilib
+
+
+log = logging.getLogger("fai_linop.packages")
 
 
 def read_custom_file(path: Path) -> list[str]:
@@ -67,6 +73,47 @@ def _settle(ctx: Context, step) -> list[str]:
     return added
 
 
+def _reason(exc: CommandError) -> str:
+    """One line for the report: the manager's own error line, else its last output line."""
+    lines = [l.strip() for l in (exc.result.stderr or exc.result.stdout or "").splitlines() if l.strip()]
+    line = next((l for l in lines if "error" in l.lower() or "not found" in l.lower() or "unable" in l.lower()),
+                lines[-1] if lines else f"exit code {exc.result.returncode}")
+    return line[:200]
+
+
+def install_each(ctx: Context, action_id: str, pm: PackageManager, names: list[str]) -> list[str]:
+    """ONE transaction first; when it fails, the rest is tried name by name so one bad package
+    does not take the others down. Journal: `packages_installed` (those that went in) and
+    `packages_failed` (name + reason); failures also go to ctx.facts for the engine's report.
+    A dry run installs nothing, so it never falls back. Returns the installed names."""
+    try:
+        pm.install(names)
+    except CommandError as exc:
+        if ctx.dry_run:
+            raise
+        ctx.ui.warn(f"{pm.name}: one transaction failed — trying the {len(names)} package(s) one by one")
+        log.warning("batch install by %s failed: %s", pm.name, exc)
+        installed, failed = [], []
+        for n in names:
+            try:
+                pm.install([n])
+                installed.append(n)
+            except CommandError as one:
+                failed.append({"name": n, "reason": _reason(one)})
+        ctx.journal.write("packages_installed", source=pm.name, names=installed)
+        if failed:
+            ctx.journal.write("packages_failed", source=pm.name, failed=failed)
+            ctx.facts.setdefault("install_failures", []).extend(
+                {"action": action_id, "source": pm.name, **f} for f in failed)
+        return installed
+    ctx.journal.write("packages_installed", source=pm.name, names=names)
+    return list(names)
+
+
+def failed_names(ctx: Context, action_id: str) -> set[str]:
+    return {f["name"] for f in ctx.facts.get("install_failures", []) if f["action"] == action_id}
+
+
 class InstallNative(Action):
     id, title, risk, reversible = "packages.native", "Install packages from the distro repositories", Risk.LOW, Reversible.PARTIAL
 
@@ -84,12 +131,11 @@ class InstallNative(Action):
         if found:
             ctx.ui.info(f"Resolved from the repositories: {', '.join(found)}")
         names = resolution(ctx).native
-        pm.install(names)
-        ctx.journal.write("packages_installed", source=pm.name, names=names)
+        install_each(ctx, self.id, pm, names)
 
     def verify(self, ctx):
-        wanted = resolution(ctx).native
-        return native_for(ctx.os, ctx.runner).installed(wanted) == set(wanted)
+        wanted = set(resolution(ctx).native) - failed_names(ctx, self.id)   # failures are reported, not re-raised
+        return native_for(ctx.os, ctx.runner).installed(wanted) == wanted
 
 
 def _aur_work(ctx: Context) -> bool:
@@ -143,12 +189,11 @@ class InstallAur(Action):
         names = resolution(ctx).aur
         if not names:
             return
-        AurHelper(ctx.runner, helper).install(names)
-        ctx.journal.write("packages_installed", source="aur", names=names)
+        install_each(ctx, self.id, AurHelper(ctx.runner, helper), names)
 
     def verify(self, ctx):
-        wanted = resolution(ctx).aur
-        return Pacman(ctx.runner).installed(wanted) == set(wanted)
+        wanted = set(resolution(ctx).aur) - failed_names(ctx, self.id)
+        return Pacman(ctx.runner).installed(wanted) == wanted
 
 
 def _flatpak_deferred(ctx: Context) -> bool:
@@ -199,12 +244,11 @@ class InstallFlatpak(Action):
         names = resolution(ctx).flatpak
         if not names:
             return
-        Flatpak(ctx.runner).install(names)
-        ctx.journal.write("packages_installed", source="flatpak", names=names)
+        install_each(ctx, self.id, Flatpak(ctx.runner), names)
 
     def verify(self, ctx):
-        wanted = resolution(ctx).flatpak
-        return Flatpak(ctx.runner).installed(wanted) == set(wanted)
+        wanted = set(resolution(ctx).flatpak) - failed_names(ctx, self.id)
+        return Flatpak(ctx.runner).installed(wanted) == wanted
 
 
 def request(ctx: Context, ids: list[str] = (), names: list[str] = ()) -> None:

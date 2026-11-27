@@ -1,0 +1,19 @@
+Package: git
+Architecture: amd64
+Version: 1:2.43.0-1ubuntu7
+Installed-Size: 21457
+Size: 3680000
+Description: fast, scalable, distributed revision control system
+
+Package: git
+Architecture: amd64
+Version: 1:2.40.0-1
+Installed-Size: 99999
+Size: 9999999
+
+Package: htop
+Architecture: amd64
+Version: 3.3.0-2
+Installed-Size: 431
+Size: 171000
+Description: interactive processes viewer

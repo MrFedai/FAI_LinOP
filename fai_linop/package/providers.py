@@ -8,12 +8,38 @@ from __future__ import annotations
 from typing import Iterable
 
 from fai_linop.core.runner import Runner
-from fai_linop.package.base import PackageManager
+from fai_linop.package.base import PackageManager, Size, parse_blocks, parse_size
 from fai_linop.platform.detect import Family, OSInfo
+
+
+def _query_sizes(runner: Runner, argv: list[str], names: list[str], name_keys, download, installed) -> dict[str, Size]:
+    """One read-only query for all names; (keys, default unit) per column. Any failure → unknown."""
+    unknown: dict[str, Size] = {n: (None, None) for n in names}
+    if not names:
+        return unknown
+    try:
+        out = runner.run([*argv, *names], mutating=False, check=False, timeout=120).stdout
+        blocks = parse_blocks(out, name_keys)
+    except Exception:  # noqa: BLE001 — the size preview must never break the plan
+        return unknown
+
+    def pick(fields, spec):
+        for k in spec[0]:
+            if k in fields:
+                return parse_size(fields[k], spec[1])
+        return None
+    for n, f in blocks.items():
+        if n in unknown:
+            unknown[n] = (pick(f, download), pick(f, installed))
+    return unknown
 
 
 class Pacman(PackageManager):
     name = "pacman"
+
+    def sizes(self, names: Iterable[str]) -> dict[str, Size]:
+        return _query_sizes(self.runner, ["pacman", "-Si"], list(names), ("name",),
+                            (("download size",), ""), (("installed size",), ""))
 
     def installed(self, names: Iterable[str]) -> set[str]:
         have = set(self.runner.run(["pacman", "-Qq"], mutating=False, check=False, timeout=60).stdout.split())
@@ -76,6 +102,11 @@ class Apt(PackageManager):
         repo = set(self.runner.run(["apt-cache", "pkgnames"], mutating=False, check=False, timeout=120).stdout.split())
         return set(names) & repo
 
+    def sizes(self, names: Iterable[str]) -> dict[str, Size]:
+        # apt-cache show: `Size:` = .deb bytes, `Installed-Size:` = KiB
+        return _query_sizes(self.runner, ["apt-cache", "show"], list(names), ("package",),
+                            (("size",), "b"), (("installed-size",), "k"))
+
     lists = "/var/lib/apt/lists"
     index_max_age_min = 24 * 60
 
@@ -105,6 +136,12 @@ class Apt(PackageManager):
 
 class Dnf(PackageManager):
     name = "dnf"
+
+    def sizes(self, names: Iterable[str]) -> dict[str, Size]:
+        # dnf4 prints `Size` (the package = download); dnf5 adds `Download size` / `Installed size`.
+        plain = [n for n in names if not n.startswith("@")]
+        return _query_sizes(self.runner, ["dnf", "-q", "info", "--available"], plain, ("name",),
+                            (("download size", "size"), "k"), (("installed size", "install size"), "k"))
 
     def installed(self, names: Iterable[str]) -> set[str]:
         have = set(self.runner.run(["rpm", "-qa", "--qf", "%{NAME}\n"], mutating=False, check=False,

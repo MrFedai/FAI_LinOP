@@ -21,7 +21,7 @@ from pathlib import Path
 
 from fai_linop import __version__
 from fai_linop.core.action import Context
-from fai_linop.core.engine import build_plan, collect_actions, execute, report, show_plan
+from fai_linop.core.engine import build_plan, collect_actions, execute, has_partial, report, show_plan
 from fai_linop.core.log import setup_file_logging
 from fai_linop.core.paths import Paths
 from fai_linop.core.profile import Profile, ProfileError
@@ -35,6 +35,7 @@ from fai_linop.recovery.journal import DONE, FAILED, Journal, NullJournal, list_
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_UNSUPPORTED = 0, 1, 2, 3
+EXIT_PARTIAL = 4   # the run finished, but some packages failed to install (see the report table)
 
 
 EPILOG = """without a command: wizard -> plan -> one confirmation -> apply (the v2.5 flow)
@@ -189,6 +190,8 @@ class App:
                 self.ui.info("No filesystem snapshot tool configured — changed files are backed up individually.")
         execute(ctx, plan, keep_going=self.args.keep_going)
         code = report(ctx, plan)
+        if code == EXIT_OK and has_partial(plan):
+            code = EXIT_PARTIAL
         if not self.runner.dry_run and any(p.action.reboot and p.status == "done" for p in plan.items) \
                 and self.ui.interactive and not self.args.yes and self.ui.confirm("Reboot now?", default=False):
             self.runner.run(["systemctl", "reboot"], sudo=True)

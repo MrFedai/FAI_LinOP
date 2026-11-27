@@ -16,12 +16,55 @@ log = logging.getLogger("fai_linop.engine")
 class PlannedAction:
     action: Action
     changes: list[Change]
-    status: str = "pending"  # pending | done | skipped | failed | not-run
+    status: str = "pending"  # pending | done | partial | skipped | failed | not-run
     message: str = ""
     deferred: bool = False   # no planned change, but work may appear at apply time (runs anyway)
 
 
-DEFERRED_NOTE = "deferred: runs only if needed, resolved at apply"
+PARTIAL = "partial"   # journal status: the action ran, some of its packages failed (re-run on resume)
+
+
+def has_partial(plan: "Plan") -> bool:
+    return any(p.status == "partial" for p in plan.items)
+
+
+def human_size(n: float) -> str:
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if n < 1024 or unit == "GiB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return ""
+
+
+def size_summary(ctx: Context, plan: Plan) -> str | None:
+    """Total download / installed size of the repo packages in the plan (v2.5 printed this, D14).
+    AUR, Flatpak and deferred names have no size here → counted as unknown. A failing query
+    leaves everything "unknown"; it never fails the plan."""
+    from fai_linop.package.providers import native_for
+    changes = [c for p in plan.items for c in p.changes if c.kind in ("package", "flatpak")]
+    deferred = sum(1 for p in plan.items if p.deferred)
+    if not changes and not deferred:
+        return None
+    repo = [c.target for c in changes if c.kind == "package" and c.detail == "repo"]
+    sizes = {}
+    if repo:
+        try:
+            sizes = native_for(ctx.os, ctx.runner).sizes(repo)
+        except Exception:  # noqa: BLE001
+            log.exception("size query failed")
+    down = [d for d, _ in sizes.values() if d is not None]
+    inst = [i for _, i in sizes.values() if i is not None]
+    unknown = len(changes) - sum(1 for n in repo if sizes.get(n, (None, None)) != (None, None))
+    unknown = max(unknown, 0)
+    parts = []
+    if down or inst:
+        parts.append(f"download {human_size(sum(down))}, installed {human_size(sum(inst))}")
+    if unknown or deferred or not parts:
+        parts.append(f"{unknown} package(s) size unknown" + (" (deferred names resolve at apply)" if deferred else ""))
+    return "Size: " + "; ".join(parts)
+
+
+DEFERRED_NOTE ="deferred: runs only if needed, resolved at apply"
 
 
 @dataclass
@@ -108,6 +151,9 @@ def show_plan(ctx: Context, plan: Plan) -> None:
         return
     ui.table("FAI_LinOP plan", ("Module", "Action", "Changes", "Risk", "Reversible"), rows)
     ui.info("Totals: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())))
+    size_line = size_summary(ctx, plan)
+    if size_line:
+        ui.info(size_line)
     for p in plan.one_way:
         ui.warn(f"ONE-WAY: {p.action.title} runs third-party code and cannot be rolled back")
     for p in plan.pending:
@@ -154,6 +200,12 @@ def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
             if not keep_going:
                 break
             continue
+        lost = [f for f in ctx.facts.get("install_failures", []) if f["action"] == a.id]
+        if lost:   # the action ran, but some packages did not install (D14: report, don't hide)
+            p.status, p.message = "partial", f"{len(lost)} package(s) failed to install"
+            journal.write("action", id=a.id, status=PARTIAL, dry_run=ctx.dry_run, failed=[f["name"] for f in lost])
+            ctx.ui.warn(f"{a.title}: {p.message}")
+            continue
         p.status = "done"
         journal.write("action", id=a.id, status=DONE, dry_run=ctx.dry_run)
         ctx.ui.ok(a.title + (" (dry run)" if ctx.dry_run else ""))
@@ -161,7 +213,7 @@ def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
         if p.status == "pending":
             p.status = "not-run"
     journal.write("run_end", summary={s: sum(1 for p in plan.items if p.status == s)
-                                      for s in ("done", "skipped", "failed", "not-run")})
+                                      for s in ("done", "partial", "skipped", "failed", "not-run")})
     return plan
 
 
@@ -171,6 +223,11 @@ def report(ctx: Context, plan: Plan) -> int:
     if rows:
         ctx.ui.table(f"Run {ctx.journal.run_id}", ("Module", "Action", "Status", "Note"), rows)
     failed = [p for p in plan.items if p.status == "failed"]
+    lost = ctx.facts.get("install_failures", [])
+    if lost:
+        ctx.ui.table("Packages that failed to install", ("Source", "Package", "Reason"),
+                     [(f["source"], f["name"], f["reason"]) for f in lost])
+        ctx.ui.warn(f"{len(lost)} package(s) failed to install; the others were installed.")
     if any(p.action.reboot and p.status == "done" for p in plan.items):
         ctx.ui.warn("A reboot is required for some changes to take effect.")
     if failed:
