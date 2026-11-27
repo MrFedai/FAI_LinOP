@@ -69,7 +69,7 @@ def run_wizard(profile: Profile, ui: UI) -> Profile:
         if q.choices:
             profile.set(q.section, q.key, ui.choose(q.text, q.choices, current))
         else:
-            profile.set(q.section, q.key, ui.confirm(q.text, bool(current)))
+            profile.set(q.section, q.key, ui.confirm(q.text, bool(current), wizard=True))
         if (q.section, q.key) == ("modules", "packages") and profile.enabled("packages"):
             _ask_groups(profile, ui)
     return profile
@@ -77,5 +77,5 @@ def run_wizard(profile: Profile, ui: UI) -> Profile:
 
 def _ask_groups(profile: Profile, ui: UI) -> None:
     current = set(profile.get("packages", "groups"))
-    chosen = [g for g in GROUPS if ui.confirm(f"  package group '{g}'?", g in current)]
+    chosen = [g for g in GROUPS if ui.confirm(f"  package group '{g}'?", g in current, wizard=True)]
     profile.set("packages", "groups", chosen)

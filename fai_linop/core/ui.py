@@ -45,7 +45,9 @@ class UI:
         self.console.print(t)
 
     # ---- questions ------------------------------------------------------------
-    def confirm(self, question: str, default: bool = False) -> bool:
+    def confirm(self, question: str, default: bool = False, *, wizard: bool = False) -> bool:
+        """`wizard=True`: with --yes the question's default (the profile value) is
+        used instead of an automatic yes, so -y never switches modules on."""
         if self.assume_yes:
             return True
         if not self.interactive:
