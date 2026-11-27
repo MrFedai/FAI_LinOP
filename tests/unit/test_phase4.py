@@ -270,16 +270,17 @@ def arch_runner(installed=(), repo=(), aur=()):
 
 def test_resolve_arch_official_aur_and_typo():
     entries = [cat.load()[i] for i in ("neovim", "google-chrome", "planify", "git")]
-    res = resolve(ARCH, arch_runner(installed=["git"], repo=["neovim"], aur=["my-aur-pkg"]), entries,
+    res = resolve(ARCH, arch_runner(installed=["git"], repo=["neovim"], aur=["my-aur-pkg", "planify"]), entries,
                   extra=["my-aur-pkg", "neovm"])
     assert res.native == ["neovim"] and res.installed == ["git"]
-    assert res.aur == ["google-chrome", "planify", "my-aur-pkg"]     # catalog aur:, catalog fallback, verified extra
+    assert res.aur == ["google-chrome", "planify", "my-aur-pkg"]     # catalog aur:, verified catalog fallback, verified extra
     assert res.unavailable == ["neovm"]                             # typo: reported, never sent to yay
 
 
 def test_resolve_ubuntu_flatpak_fallback():
     entries = [cat.load()[i] for i in ("neovim", "discord", "fastfetch", "metasploit")]
     runner = (FakeRunner().on("dpkg-query", result="").on("apt-cache", "pkgnames", result="neovim\n")
+              .on("find", "/var/lib/apt/lists", result="/var/lib/apt/lists/x_Packages\n")  # index refreshed today
               .on("sh", "-c", result=0).on("flatpak", "list", result=""))
     res = resolve(UBUNTU, runner, entries)
     assert res.native == ["neovim"] and res.flatpak == ["com.discordapp.Discord"]
@@ -310,7 +311,9 @@ def test_package_actions_plan_on_fresh_arch(tmp_path):
     runner = arch_runner(repo=["git", "curl", "neovim"]).on("sh", "-c", result=Result((), 1))  # yay missing
     ctx = _ctx(tmp_path, runner, profile_text='[packages]\ngroups = []\nextra = ["neovim"]\n')
     native = InstallNative().plan(ctx)
-    assert {c.target for c in native} == {"git", "curl", "neovim"}
+    assert {c.target for c in native if c.detail == "repo"} == {"git", "curl", "neovim"}
     helper = InstallAurHelper().plan(ctx)
     assert helper and helper[-1].target == "yay-bin"                  # AUR work pending, helper missing
-    assert {c.target for c in InstallAur().plan(ctx)} >= {"wget"}     # not in the fake repo → AUR fallback
+    # not in the fake repo and no helper to ask the AUR: deferred to apply (V301 2.2), not guessed as AUR
+    assert "wget" in {c.target for c in native if c.detail.startswith("deferred")}
+    assert "wget" not in {c.target for c in InstallAur().plan(ctx)}

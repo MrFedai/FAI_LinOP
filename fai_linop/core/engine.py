@@ -18,6 +18,10 @@ class PlannedAction:
     changes: list[Change]
     status: str = "pending"  # pending | done | skipped | failed | not-run
     message: str = ""
+    deferred: bool = False   # no planned change, but work may appear at apply time (runs anyway)
+
+
+DEFERRED_NOTE = "deferred: runs only if needed, resolved at apply"
 
 
 @dataclass
@@ -26,7 +30,7 @@ class Plan:
 
     @property
     def pending(self) -> list[PlannedAction]:
-        return [p for p in self.items if p.changes and p.status == "pending"]
+        return [p for p in self.items if (p.changes or p.deferred) and p.status == "pending"]
 
     @property
     def one_way(self) -> list[PlannedAction]:
@@ -61,11 +65,15 @@ def build_plan(ctx: Context, actions: list[Action], done: set[str] = frozenset()
             continue
         try:
             changes = action.plan(ctx)
+            deferred = not changes and action.deferred(ctx)
         except Exception as exc:  # any planning error (CommandError, OSError, KeyError…) is a failed row
             log.exception("planning %s failed", action.id)
             first = str(exc).splitlines()[0] if str(exc) else ""
             detail = f"{type(exc).__name__}: {first}" if first else type(exc).__name__
             plan.items.append(PlannedAction(action, [], "failed", f"planning failed: {detail}"))
+            continue
+        if deferred:
+            plan.items.append(PlannedAction(action, [], "pending", DEFERRED_NOTE, deferred=True))
             continue
         status = "pending" if changes else "skipped"
         plan.items.append(PlannedAction(action, changes, status, "" if changes else "already in the desired state"))
@@ -76,6 +84,9 @@ def show_plan(ctx: Context, plan: Plan) -> None:
     ui = ctx.ui
     rows, kinds = [], {}
     for p in plan.items:
+        if p.deferred and p.status == "pending":
+            rows.append((p.action.module, p.action.title, DEFERRED_NOTE, p.action.risk.value, p.action.reversible.value))
+            continue
         if not p.changes:
             continue
         for c in p.changes:

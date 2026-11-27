@@ -76,6 +76,19 @@ class Apt(PackageManager):
         repo = set(self.runner.run(["apt-cache", "pkgnames"], mutating=False, check=False, timeout=120).stdout.split())
         return set(names) & repo
 
+    lists = "/var/lib/apt/lists"
+    index_max_age_min = 24 * 60
+
+    def index_current(self) -> bool:
+        """True when some package list was written in the last day. Empty lists (fresh
+        install, container) or an old index → False: names missing from it are resolved
+        again after `apt-get update` at apply time. ctime is used because apt sets the
+        mtime from the server; a false "old" only defers names, it never loses them."""
+        out = self.runner.run(["find", self.lists, "-maxdepth", "1", "-name", "*_Packages*",
+                               "-cmin", f"-{self.index_max_age_min}", "-print", "-quit"],
+                              mutating=False, check=False, timeout=30).stdout
+        return bool(out.strip())
+
     def refresh(self) -> bool:
         """False when some repository could not be refreshed (e.g. a broken third-party
         source); installation continues with the indexes that did update."""

@@ -74,6 +74,11 @@ class Action:
     def verify(self, ctx: Context) -> bool:
         return True
 
+    def deferred(self, ctx: Context) -> bool:
+        """True when plan() is empty only because this action's work is known at apply
+        time (e.g. deferred package names); the engine then still runs it."""
+        return False
+
     def __repr__(self) -> str:
         return f"<Action {self.id}>"
 
