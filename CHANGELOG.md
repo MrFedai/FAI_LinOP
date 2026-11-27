@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Fedora: `chsh` comes from `util-linux` (catalog id `util-linux-user`). On Fedora 45 `util-linux-user` is only a provide of `util-linux`, so the v3.0.1 catalog check reported it missing and the login shell was not changed (CI fedora job red on the v3.0.1 tag).
+
 ## v3.0.1: packages resolved in install order, safer shell and cleanup (2026-11-27)
 
 Bug-fix release from the V301 review (8 items). No new features; no owner dotfile changed (D8).

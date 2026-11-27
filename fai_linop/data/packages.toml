@@ -926,8 +926,8 @@ description = "Wayland clipboard"
 groups = []
 arch = ""
 debian = ""
-fedora = "util-linux-user"
-description = "chsh (Fedora ships it outside util-linux)"
+fedora = "util-linux"
+description = "chsh (Fedora: in util-linux; `util-linux-user` is only a provide, invisible to repoquery)"
 
 [pkg.ubuntu-drivers-common]
 groups = []
