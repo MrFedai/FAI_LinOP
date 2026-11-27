@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from fai_linop.display.model import Mode, Monitor, Target
+from fai_linop.display.model import Mode, Monitor, Target, unique_identities
 
 VERIFY, TEMPORARY, PERSISTENT = 0, 1, 2
 _PATH = "/org/gnome/Mutter/DisplayConfig"
@@ -78,6 +78,7 @@ def parse_state(state: tuple) -> tuple[int, list[Monitor], list[dict]]:
                 current = mode
         monitors.append(Monitor(connector, vendor, product, serial_no, tuple(modes), current,
                                 bool(_prop(props, "is-builtin", False)), str(_prop(props, "display-name", ""))))
+    monitors = unique_identities(monitors)
     logical = []
     for x, y, scale, transform, primary, mons, _p in logical_raw:
         logical.append({"x": int(x), "y": int(y), "scale": float(scale), "transform": int(transform),
@@ -127,6 +128,64 @@ class GnomeDisplay:
             serial, _, _ = self.read()
             self.bus.apply_monitors_config(serial, PERSISTENT, build_config(targets, chosen), {})
         raise DisplayConfigError("monitor configuration did not settle")
+
+    def restore(self, before: dict) -> None:
+        """Rollback (D6): apply a layout recorded by `snapshot` again — positions,
+        scale, transform, primary and the mode of every monitor — persistently, and
+        check that Mutter kept it. Raises DisplayConfigError with the reason; nothing
+        is applied when the recorded layout no longer fits the connected monitors."""
+        logical_before, monitors_before = before.get("logical") or [], before.get("monitors")
+        if not logical_before or monitors_before is None:
+            raise DisplayConfigError("this run did not record the monitor modes; restore them in Settings → Displays")
+        serial, monitors, _ = self.read()
+        by_id = {m.identity: m for m in monitors}
+        recorded = {b["connector"]: b for b in monitors_before}
+        if new := sorted(set(by_id) - {b["identity"] for b in monitors_before}):
+            raise DisplayConfigError(f"{', '.join(new)} was connected after the run; restore by hand")
+        chosen: dict[str, tuple[Monitor, Mode]] = {}
+        for conn in (c for lm in logical_before for c in lm["connectors"]):
+            b = recorded.get(conn)
+            if b is None or not b.get("mode"):
+                raise DisplayConfigError(f"{conn}: mode before the run was not recorded")
+            mon = by_id.get(b["identity"])
+            if mon is None:
+                raise DisplayConfigError(f"{b['identity']} is not connected any more")
+            want = b["mode"]
+            mode = next((md for md in mon.modes if md.id == want["id"]), None) or next(
+                (md for md in mon.modes if _same(md, Mode(want["width"], want["height"], want["refresh"]))), None)
+            if mode is None:
+                raise DisplayConfigError(f"{mon.identity}: mode {want['width']}x{want['height']}@{want['refresh']:.2f} "
+                                         "is not offered any more")
+            chosen[conn] = (mon, mode)
+        config = [(int(lm["x"]), int(lm["y"]), float(lm["scale"]), int(lm.get("transform", 0)), bool(lm["primary"]),
+                   [(chosen[c][0].connector, chosen[c][1].id, {}) for c in lm["connectors"]])
+                  for lm in logical_before]
+        self.bus.apply_monitors_config(serial, PERSISTENT, config, {})
+        _, monitors, logical = self.read()
+        current = {m.identity: m.current for m in monitors}
+        where = {c: (lm["x"], lm["y"], lm["scale"], lm["primary"]) for lm in logical for c in lm["connectors"]}
+        wrong = []
+        for lm in logical_before:
+            for c in lm["connectors"]:
+                mon, mode = chosen[c]
+                if not _same(current.get(mon.identity), mode) or \
+                        where.get(mon.connector) != (int(lm["x"]), int(lm["y"]), float(lm["scale"]), bool(lm["primary"])):
+                    wrong.append(mon.identity)
+        if wrong:
+            raise DisplayConfigError(f"Mutter did not keep the restored layout for {', '.join(wrong)}")
+
+
+def _mode_record(mode: Mode | None) -> dict | None:
+    if mode is None:
+        return None
+    return {"id": mode.id, "width": mode.width, "height": mode.height, "refresh": mode.refresh}
+
+
+def snapshot(monitors: list[Monitor], logical: list[dict]) -> dict:
+    """Journal record of the current layout, enough for `GnomeDisplay.restore`."""
+    return {"logical": logical,
+            "monitors": [{"connector": m.connector, "identity": m.identity, "mode": _mode_record(m.current)}
+                         for m in monitors]}
 
 
 def _same(a: Mode | None, b: Mode) -> bool:

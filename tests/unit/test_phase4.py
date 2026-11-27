@@ -106,8 +106,9 @@ def test_layout_matches_by_identity_not_connector():
 
 
 def test_scaled_monitor_logical_width():
-    places = [Placement("BOE 0x0bca", 0, 0, scale=1.25, primary=True), Placement("SAM Odyssey H1", 1, 0)]
-    targets = plan_layout(owner_monitors(), places, "resolution")
+    # eDP now 1920x1200 at 1.25 = 1536 wide; its best mode 2560x1600 = 2048: the right neighbour moves
+    places = [Placement("BOE 0x0bca", 0, 0, scale=1.25, primary=True), Placement("SAM Odyssey H1", 1536, 0)]
+    targets = plan_layout(owner_monitors(current_edp=EDP_MODES[2]), places, "resolution")
     assert targets[1].placement.x == 2048                                   # 2560 / 1.25
 
 

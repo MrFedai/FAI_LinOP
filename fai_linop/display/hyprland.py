@@ -8,7 +8,7 @@ import json
 import re
 
 from fai_linop.core.runner import Runner
-from fai_linop.display.model import Mode, Monitor, Target
+from fai_linop.display.model import Mode, Monitor, Target, unique_identities
 
 BEGIN = "# >>> FAI_LinOP monitors (generated) >>>"
 END = "# <<< FAI_LinOP monitors <<<"
@@ -27,15 +27,27 @@ def read(runner: Runner) -> list[Monitor] | None:
                       (_MODE.match(s).groups() for s in m.get("availableModes", []) if _MODE.match(s)))
         current = Mode(int(m["width"]), int(m["height"]), float(m["refreshRate"]))
         monitors.append(Monitor(m["name"], m.get("make", ""), m.get("model", ""), m.get("serial", ""),
-                                modes, current, m["name"].startswith("eDP"), m.get("description", "")))
-    return monitors
+                                modes, current, m["name"].startswith("eDP"), _desc(m)))
+    return unique_identities(monitors)
+
+
+def _desc(m: dict) -> str:
+    """What `desc:` matches: the description without Hyprland's " (DP-1)" suffix."""
+    desc = m.get("description", "").strip()
+    suffix = f"({m['name']})"
+    if desc.endswith(suffix):
+        desc = desc[: -len(suffix)].rstrip()
+    return desc or " ".join(p for p in (m.get("make", ""), m.get("model", ""), m.get("serial", "")) if p)
 
 
 def monitor_lines(targets: list[Target], prefer: str) -> list[str]:
     lines = []
+    names = [t.monitor.display_name for t in targets]
     for t in targets:
         p = t.placement
-        ident = f"desc:{t.monitor.display_name}" if t.monitor.display_name else t.monitor.connector
+        # twins share a description; `desc:` would hit the first one only
+        unique = t.monitor.display_name and names.count(t.monitor.display_name) == 1
+        ident = f"desc:{t.monitor.display_name}" if unique else t.monitor.connector
         mode = t.mode.label() if t.mode.id != "auto" else ("highrr" if prefer == "refresh" else "highres")
         extra = f",transform,{p.transform}" if p.transform else ""
         lines.append(f"monitor={ident},{mode},{p.x}x{p.y},{p.scale:g}{extra}")

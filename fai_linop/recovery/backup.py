@@ -197,7 +197,10 @@ def _restore_dconf(runner: Runner, dump: Path) -> str:
     return "restored GNOME settings (dconf) from the full backup"
 
 
-def _restore_one(ev: dict, runner: Runner) -> str:
+def _restore_one(ev: dict, runner: Runner, display=None) -> str:
+    if ev["event"] == "display_before":
+        from fai_linop.display.actions import restore_layout   # the logic lives in display/
+        return restore_layout(ev, display)
     if ev["event"] == "dir_backup":
         src, target = Path(ev["backup"]), Path(ev["path"])
         if src.is_dir():
@@ -228,15 +231,19 @@ def _restore_one(ev: dict, runner: Runner) -> str:
     return f"removed {target} (did not exist before)"
 
 
-def restore_files(journal: Journal, runner: Runner) -> list[str]:
-    """Undo every file (and dconf) change of a run, newest first. Every item is
-    reported on its own and one failure never stops the rest. Failed items start
-    with "FAILED" / "MISSING". The result is written to the journal."""
+RESTORABLE = ("file_backup", "dconf_backup", "dir_backup", "display_before")
+
+
+def restore_files(journal: Journal, runner: Runner, display=None) -> list[str]:
+    """Undo every file, dconf and monitor-layout change of a run, newest first.
+    Every item is reported on its own and one failure never stops the rest. Failed
+    items start with "FAILED" / "MISSING". The result is written to the journal.
+    `display`: the GNOME display backend (default: the session's Mutter)."""
     report = []
-    events = [ev for ev in journal.events() if ev["event"] in ("file_backup", "dconf_backup", "dir_backup")]
+    events = [ev for ev in journal.events() if ev["event"] in RESTORABLE]
     for ev in reversed(events):
         try:
-            report.append(_restore_one(ev, runner))
+            report.append(_restore_one(ev, runner, display))
         except Exception as exc:
             report.append(f"FAILED {ev.get('path', '?')}: {exc}")
     failed = sum(line.startswith(("FAILED", "MISSING")) for line in report)

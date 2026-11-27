@@ -1,12 +1,18 @@
 """Monitor model and the D13 rules: best mode per monitor, owner's layout kept.
 
 Identity = vendor + product + serial (never the connector name, which changes
-with the driver: eDP-1 vs eDP-2).
+with the driver: eDP-1 vs eDP-2). Only when two connected monitors share that
+identity (twins with an empty serial) is the connector added as a distinguishing
+tag: "DEL U2419H [DP-1]".
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+import re
+from collections import Counter
+from dataclasses import dataclass, replace
+
+_TAG = re.compile(r"\s*\[[^\]]*\]$")
 
 
 @dataclass(frozen=True)
@@ -35,10 +41,22 @@ class Monitor:
     current: Mode | None = None
     builtin: bool = False
     display_name: str = ""
+    tag: str = ""             # set only for twins (see unique_identities)
+
+    @property
+    def base_identity(self) -> str:
+        return " ".join(p for p in (self.vendor, self.product, self.serial) if p) or self.connector
 
     @property
     def identity(self) -> str:
-        return " ".join(p for p in (self.vendor, self.product, self.serial) if p) or self.connector
+        return f"{self.base_identity} [{self.tag}]" if self.tag else self.base_identity
+
+
+def unique_identities(monitors: list[Monitor]) -> list[Monitor]:
+    """Twins (same vendor/product/serial) get their connector as tag, so every
+    monitor stays a separate target and dict keys never collide."""
+    counts = Counter(m.base_identity for m in monitors)
+    return [replace(m, tag=m.connector) if counts[m.base_identity] > 1 else m for m in monitors]
 
 
 @dataclass
@@ -84,38 +102,90 @@ def plan_layout(monitors: list[Monitor], placements: list[Placement], prefer: st
                 keep_positions: bool = False) -> list[Target]:
     """Combine detected monitors with the wanted placement.
 
-    Monitors are laid out in the placements' left-to-right order (by x). Unless
-    `keep_positions`, x is recomputed so that neighbours touch after the mode
-    change (GNOME rejects gaps/overlaps); y and scale are kept."""
-    by_id = {p.identity: p for p in placements}
-    targets = []
-    for mon in monitors:
-        place = by_id.get(mon.identity) or by_id.get(mon.connector)
-        if place is None:
-            # new or unknown monitor: to the right of everything, not primary
-            place = Placement(mon.identity, x=10**6, y=0)
-        if not place.enabled:
+    Positions are kept (stacked, mirrored and offset layouts survive). Unless
+    `keep_positions`, a monitor whose width changes with the new mode pushes the
+    monitors to its right by the difference, so neighbours keep touching (GNOME
+    rejects gaps/overlaps). A monitor without a placement goes right of all others."""
+    matched = match_placements(monitors, placements)
+    targets, unplaced = [], []
+    for i, mon in enumerate(monitors):
+        place = matched.get(i)
+        if place is not None and not place.enabled:
             continue
         ranked = rank_modes(mon.modes, prefer)
         if not ranked:
             continue
-        targets.append(Target(mon, ranked, replace(place, identity=mon.identity)))
-    targets.sort(key=lambda t: (t.placement.x, t.placement.y))
+        if place is None:
+            unplaced.append(Target(mon, ranked, Placement(mon.identity)))
+        else:
+            targets.append(Target(mon, ranked, replace(place, identity=mon.identity)))
     if not keep_positions:
-        x = min((t.placement.x for t in targets), default=0) if targets else 0
-        x = 0 if x >= 10**6 else x
-        for t in targets:
-            t.placement.x = x
-            x += logical_width(t)
+        _shift_for_width_changes(targets)
+    x = max((t.placement.x + logical_width(t) for t in targets), default=0)
+    for t in unplaced:                 # new or unknown monitor: right of everything, not primary
+        t.placement.x = x
+        x += logical_width(t)
+    targets = sorted(targets + unplaced, key=lambda t: (t.placement.x, t.placement.y))
     if targets and not any(t.placement.primary for t in targets):
         builtin = [t for t in targets if t.monitor.builtin]
         (builtin[0] if builtin else targets[0]).placement.primary = True
     return targets
 
 
-def logical_width(t: Target) -> int:
-    w = t.mode.height if t.placement.transform in (1, 3, 5, 7) else t.mode.width
+def logical_width(t: Target, mode: Mode | None = None) -> int:
+    mode = mode or t.mode
+    w = mode.height if t.placement.transform in (1, 3, 5, 7) else mode.width
     return int(round(w / (t.placement.scale or 1.0)))
+
+
+def _shift_for_width_changes(targets: list[Target]) -> None:
+    """Every monitor that starts at or right of another's old right edge moves by
+    that monitor's width change. Computed from the old positions, so shifts add up
+    along a row; monitors above / below or mirrored stay where they are."""
+    old = [(t.placement.x, logical_width(t, t.monitor.current)) for t in targets]
+    shift = [0] * len(targets)
+    for i, t in enumerate(targets):
+        if t.monitor.current is None:          # off: no old width to compare with
+            continue
+        x0, old_w = old[i]
+        delta = logical_width(t) - old_w
+        if delta:
+            for j in range(len(targets)):
+                if j != i and old[j][0] >= x0 + old_w:
+                    shift[j] += delta
+    for t, dx in zip(targets, shift):
+        t.placement.x += dx
+
+
+def _loose_match(placement_id: str, mon: Monitor) -> bool:
+    """Same monitor seen by another compositor: GNOME reports the PNP vendor code
+    ("SAM"), Hyprland the full name ("Samsung Electric Company"); product and
+    serial agree (case aside). A twin tag is ignored here."""
+    pid = _TAG.sub("", placement_id).strip().lower()
+    if pid == mon.base_identity.lower():
+        return True
+    tail = " ".join(p for p in (mon.product, mon.serial) if p).lower()
+    return bool(mon.product) and (pid == tail or pid.endswith(" " + tail))
+
+
+def match_placements(monitors: list[Monitor], placements: list[Placement]) -> dict[int, Placement]:
+    """Monitor index → its placement. Each placement is used once; passes in
+    order: exact identity, connector (old profiles / no EDID), loose identity."""
+    found: dict[int, Placement] = {}
+    used: set[int] = set()
+    tests = (lambda p, m: p.identity == m.identity,
+             lambda p, m: p.identity == m.connector,
+             lambda p, m: _loose_match(p.identity, m))
+    for test in tests:
+        for i, mon in enumerate(monitors):
+            if i in found:
+                continue
+            for j, place in enumerate(placements):
+                if j not in used and test(place, mon):
+                    found[i] = place
+                    used.add(j)
+                    break
+    return found
 
 
 def placements_from_state(monitors: list[Monitor], logical: list[dict]) -> list[Placement]:

@@ -241,6 +241,8 @@ class App:
                     self.ui.info(f"would restore {ev['path']}" if ev["existed"] else f"would remove {ev['path']}")
                 elif ev["event"] in ("dconf_backup", "dir_backup"):
                     self.ui.info(f"would restore {ev['path']}")
+                elif ev["event"] == "display_before":
+                    self.ui.info("would restore the monitor layout from before the run (GNOME)")
             return EXIT_OK
         # the rollback is a run of its own (listed by `linop runs`) but never becomes `latest`
         record = Journal.create(self.paths.runs, latest=False, command="rollback", target=journal.run_id)
