@@ -319,4 +319,6 @@ def test_dconf_backup_and_restore_use_the_user_database_only(tmp_path):
     journal.write("dconf_backup", path=str(dump))
     restore_files(journal, runner)
     dconf_calls = [(argv[1], prof) for argv, prof in seen]
-    assert dconf_calls == [("dump", "user-db:user\n"), ("reset", "user-db:user\n"), ("load", "user-db:user\n")]
+    # dump = the safety copy of the state before the restore (V300 1.8)
+    assert dconf_calls == [("dump", "user-db:user\n"), ("dump", "user-db:user\n"),
+                           ("reset", "user-db:user\n"), ("load", "user-db:user\n")]

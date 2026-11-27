@@ -10,13 +10,37 @@ import shutil
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk
 from fai_linop.package import catalog as cat
 from fai_linop.package.providers import native_for
+from fai_linop.platform.detect import Family, OSInfo, Tier
 from fai_linop.recovery.backup import backup_dir, dconf_user
 
 # v2.5 PROTECTED_PKGS (tests/golden/v25/packages.json) — never removed
-PROTECTED = {"base", "base-devel", "linux", "linux-firmware", "sudo", "pacman", "yay", "systemd", "systemd-libs",
-             "glibc", "networkmanager", "network-manager-applet", "wpa_supplicant", "wget", "curl", "git",
-             "openssh", "vim", "nano", "neovim", "bluez", "bluez-utils", "kitty", "alacritty", "terminator",
-             "gnome-terminal", "konsole", "xfce4-terminal", "bash", "zsh", "fish"}
+# Kept as catalog ids (fai_linop/data/packages.toml) and translated to each distro's own name
+# (V300 1.10): Fedora's `vim-enhanced` and Debian's `network-manager-gnome` stay too.
+PROTECTED_IDS = {"base-devel", "network-manager-applet", "wget", "curl", "git", "vim", "neovim", "kitty",
+                 "alacritty", "terminator", "gnome-terminal", "zsh", "fish"}
+# core names that are not in the catalog, in each family's own spelling
+PROTECTED_CORE = {
+    Family.ARCH: {"base", "linux", "linux-firmware", "sudo", "pacman", "yay", "systemd", "systemd-libs", "glibc",
+                  "networkmanager", "wpa_supplicant", "openssh", "nano", "bluez", "bluez-utils", "konsole",
+                  "xfce4-terminal", "bash"},
+    Family.DEBIAN: {"sudo", "apt", "dpkg", "systemd", "libc6", "network-manager", "wpasupplicant",
+                    "openssh-client", "openssh-server", "nano", "bluez", "konsole", "xfce4-terminal", "bash",
+                    "linux-image-amd64", "linux-image-generic", "linux-firmware", "build-essential"},
+    Family.FEDORA: {"sudo", "dnf", "rpm", "systemd", "systemd-libs", "glibc", "NetworkManager", "wpa_supplicant",
+                    "openssh", "openssh-clients", "openssh-server", "nano", "bluez", "konsole", "xfce4-terminal",
+                    "bash", "kernel", "kernel-core", "linux-firmware"},
+}
+
+
+def protected_names(os_info: OSInfo) -> set[str]:
+    """Native names of every protected package on this distro."""
+    catalog = cat.load()
+    names = {catalog[i].native(os_info).removeprefix("aur:") for i in PROTECTED_IDS if i in catalog}
+    return (names | PROTECTED_CORE.get(os_info.family, set())) - {""}
+
+
+# Arch view, kept for callers that import the old name
+PROTECTED = protected_names(OSInfo(Family.ARCH, Tier.SUPPORTED, "arch", "Arch Linux"))
 # config paths FAI_LinOP itself writes or that belong to packages it installs (relative to $HOME)
 # (configs of PROTECTED packages — kitty, alacritty, terminator, nvim, vim, git — are kept: D19)
 CONFIGS = (".config/hypr", ".config/waybar", ".config/wofi", ".config/fastfetch", ".config/btop",
@@ -44,7 +68,7 @@ class ResetPackages(Action):
     id, title, risk, reversible = "reset.packages", "Uninstall packages FAI_LinOP installs (protected list kept)", Risk.HIGH, Reversible.PARTIAL
 
     def plan(self, ctx):
-        names = {e.native(ctx.os).removeprefix("aur:") for g in GROUPS for e in cat.group(g)} - {""} - PROTECTED
+        names = {e.native(ctx.os).removeprefix("aur:") for g in GROUPS for e in cat.group(g)} - {""} - protected_names(ctx.os)
         self._names = sorted(native_for(ctx.os, ctx.runner).installed(names))
         return [Change("package-remove", n) for n in self._names]
 

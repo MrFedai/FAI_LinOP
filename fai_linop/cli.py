@@ -245,13 +245,18 @@ class App:
         # the rollback is a run of its own (listed by `linop runs`) but never becomes `latest`
         record = Journal.create(self.paths.runs, latest=False, command="rollback", target=journal.run_id)
         lines = restore_files(journal, self.runner)
+        failed = 0
         for line in lines:
-            self.ui.info(line)
-            record.write("restored", line=line)
-        record.write("run_end", summary={"restored": len(lines), "target": journal.run_id})
+            bad = line.startswith(("FAILED", "MISSING"))
+            failed += bad
+            (self.ui.error if bad else self.ui.info)(line)
+            record.write("restored", line=line, ok=not bad)
+        record.write("run_end", summary={"restored": len(lines) - failed, "failed": failed, "target": journal.run_id})
+        if failed:
+            self.ui.error(f"{failed} item(s) could NOT be restored; the rest were. Details: {record.path}")
         self.ui.warn("Installed packages and started services are NOT reverted automatically; "
                       f"see {journal.path} for the list.")
-        return EXIT_OK
+        return EXIT_FAILED if failed else EXIT_OK
 
     def cmd_runs(self) -> int:
         rows = []
@@ -347,7 +352,8 @@ class App:
         if not plan.pending:
             return EXIT_OK
         if not self.runner.dry_run and not self.ui.typed_confirm(
-                "SMART FACTORY RESET — everything above is backed up first and can be restored with `linop rollback`.",
+                "SMART FACTORY RESET — files and GNOME settings are backed up first; `linop rollback` restores them."
+                + (" Packages removed by --uninstall are NOT reinstalled by rollback." if self.args.uninstall else ""),
                 "CLEAN"):
             self.ui.info("Cancelled — nothing was changed.")
             journal.write("run_end", summary={"cancelled": True})
