@@ -1,0 +1,10 @@
+# graphify code map scope: generated output, the v2.5 legacy script, golden/fixture data and documents are left out (code only)
+.venv/
+legacy/
+docs/
+configs/
+tests/golden/
+tests/fixtures/
+tests/characterization/scenarios/
+*.md
+*.lock
