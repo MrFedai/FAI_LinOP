@@ -148,3 +148,12 @@ def test_fedora_chsh_requests_util_linux_user(tmp_path):
     ctx = ctx_for(tmp_path, ZSH, fedora, runner=runner)
     actions.build_shell(ctx)
     assert "util-linux-user" in ctx.facts["package_ids"]
+
+
+def test_arch_chsh_does_not_request_util_linux_user(tmp_path):
+    from fai_linop.platform.detect import Family, OSInfo, Tier
+    arch = OSInfo(Family.ARCH, Tier.SUPPORTED, "arch", "Arch")
+    runner = FakeRunner().on("getent", result="u:x:1:1::/h:/bin/bash")
+    ctx = ctx_for(tmp_path, ZSH, arch, runner=runner)
+    actions.build_shell(ctx)
+    assert "util-linux-user" not in ctx.facts["package_ids"]

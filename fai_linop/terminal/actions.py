@@ -19,6 +19,7 @@ from fai_linop.core.action import Action, Change, Context, Reversible, Risk, reg
 from fai_linop.core.common import WriteFile, read_text
 from fai_linop.core.paths import current_user
 from fai_linop.package.actions import request, resolution
+from fai_linop.platform.detect import Family
 
 # pinned 2026-09-24 (git ls-remote HEAD); update deliberately
 PINS = {
@@ -358,7 +359,8 @@ def build_shell(ctx: Context):
     name = ctx.profile.get("shell", "name")
     if name == "none":
         return []
-    chsh_ids = ["util-linux-user"] if os.path.basename(ChangeShell.login_shell(ctx)) != name else []  # Fedora: chsh
+    changing = os.path.basename(ChangeShell.login_shell(ctx)) != name
+    chsh_ids = ["util-linux-user"] if changing and ctx.os.family is Family.FEDORA else []  # chsh lives here only on Fedora
     request(ctx, ids=["font-jetbrains-nerd", name, *chsh_ids] + (["starship"] if name in ("fish", "bash") else []))
     if name == "zsh":
         return [OhMyZsh(), Zshrc(), ChangeShell()]
