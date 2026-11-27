@@ -30,7 +30,7 @@ debloat = false
 
 [wallpaper]
 mode = "none"         # solid black (D18)
-repo = "https://github.com/MrFedai/ArCoN-wallpapers.git"   # private, optional (D25)
+repo = "https://github.com/MrFedai/wallp.git"   # optional (D25)
 
 [display]
 prefer = "resolution" # when max resolution and max refresh cannot coexist
