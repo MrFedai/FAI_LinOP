@@ -8,7 +8,7 @@ Run everything: `uv run pytest` (Python ≥ 3.11). Labels follow CLAUDE.md rule 
 | same, `@pytest.mark.dconf` | v2.5 and v3 `gno.conf` load into a real, throw-away dconf database and read back the owner settings + black wallpaper | `dconf`, `dbus-run-session` | INTEGRATION TESTED (container) |
 | `tests/characterization/` | what ArCoN **v2.5** does: package lists, commands issued, files written, exact dconf input — bugs included | bash, git; Arch scenarios need root + `unshare` | INTEGRATION TESTED (container, mocked tools) |
 | `tests/unit/` | v3 core, detection, packages, display (fake Mutter), every feature module with `FakeRunner` | Python | UNIT TESTED |
-| `tests/integration/test_real_run.py` | REAL `arcon apply` (packages, dconf, dotfiles, Oh-My-Zsh, chsh) → idempotent 2nd run → `arcon rollback` | `ARCON_REAL_RUN=1`, disposable container/VM, dbus, dconf, sudo | INTEGRATION TESTED (Ubuntu 24.04 container, run by hand) |
+| `tests/integration/test_real_run.py` | REAL `linop apply` (packages, dconf, dotfiles, Oh-My-Zsh, chsh) → idempotent 2nd run → `linop rollback` | `LINOP_REAL_RUN=1`, disposable container/VM, dbus, dconf, sudo | INTEGRATION TESTED (Ubuntu 24.04 container, run by hand) |
 
 Nothing here validates a real GNOME session, real package installs, GPU, monitors or Hyprland: those are NOT TESTED until VM/native runs.
 
@@ -28,11 +28,11 @@ Golden files: `tests/golden/v25/*.json`. Regenerate only deliberately: `python t
 
 | File | Rule |
 |---|---|
-| `tests/golden/sources.sha256` | repo dotfiles; change only with owner approval (later: `arcon capture`) |
+| `tests/golden/sources.sha256` | repo dotfiles; change only with owner approval (later: `linop capture`) |
 | `tests/golden/owner_settings.json` | settings that must survive every version |
 | `tests/golden/v3/gno.conf` | expected deploy for user `arcontest`, default black wallpaper |
 | `tests/golden/v3/hyprlock.conf` | expected deploy without Ax-Shell |
-| `arcon/dotfiles/rules.py` | D18 checker, used by the deploy/verify step and the tests |
+| `fai_linop/dotfiles/rules.py` | D18 checker, used by the deploy/verify step and the tests |
 
 `hyprland.conf` v3 golden is deferred to Phase 4 (depends on detected monitors).
 
@@ -48,9 +48,9 @@ Expected on Arch in a root container: the AUR actions fail (makepkg refuses root
 
 **First CI run (35993001306) — real apply + rollback:**
 - debian:stable, ubuntu:24.04 — cause found: the images have no `dconf-service` (`dconf-cli` does not pull it in), so every dconf write failed with `ServiceUnknown: ca.desrt.dconf`. A desktop always has it; the workflow now installs it — confirmed green in CI run 36054621202. Reproduced and fix verified in a fresh Ubuntu 24.04 minbase rootfs (debootstrap + chroot, the workflow's exact commands) — not in Docker (Docker Hub blocked here).
-- archlinux, fedora — cause found from the `arcon-runs-0` / `arcon-runs-3` artifacts of run 36055367756: `shell.chsh` failed with `/usr/sbin/zsh is not listed in /etc/shells`. Both distros merged /usr/sbin into /usr/bin, so `which zsh` (root's PATH has sbin first) returns /usr/sbin/zsh — the same file as the listed /usr/bin/zsh. `ChangeShell` now picks the /etc/shells entry that points to the same file. Reproduced (same error) and fix verified on Ubuntu 24.04 with a merged-sbin symlink; unit test added. Run 36056633594 (with that fix): **archlinux PASS**; fedora got further and failed at `arcon rollback`: `dconf dump /` shows the merged view incl. Fedora's system database (authselect's locked `/org/gnome/login-screen/enable-*-authentication` keys), and loading that backup back failed with "non-writable keys". Backups/restores now use the user database only (`DCONF_PROFILE` = `user-db:user`). Reproduced (same error) and fix verified on Ubuntu 24.04 with a Fedora-like locked system dconf database plus merged sbin; unit test added. Real Fedora container: NOT TESTED until the next CI run. Also fixed earlier: the Arch-as-root idempotency check (console shows titles, not ids).
+- archlinux, fedora — cause found from the `arcon-runs-0` / `arcon-runs-3` artifacts (pre-rename names) of run 36055367756: `shell.chsh` failed with `/usr/sbin/zsh is not listed in /etc/shells`. Both distros merged /usr/sbin into /usr/bin, so `which zsh` (root's PATH has sbin first) returns /usr/sbin/zsh — the same file as the listed /usr/bin/zsh. `ChangeShell` now picks the /etc/shells entry that points to the same file. Reproduced (same error) and fix verified on Ubuntu 24.04 with a merged-sbin symlink; unit test added. Run 36056633594 (with that fix): **archlinux PASS**; fedora got further and failed at `linop rollback`: `dconf dump /` shows the merged view incl. Fedora's system database (authselect's locked `/org/gnome/login-screen/enable-*-authentication` keys), and loading that backup back failed with "non-writable keys". Backups/restores now use the user database only (`DCONF_PROFILE` = `user-db:user`). Reproduced (same error) and fix verified on Ubuntu 24.04 with a Fedora-like locked system dconf database plus merged sbin; unit test added. Real Fedora container: NOT TESTED until the next CI run. Also fixed earlier: the Arch-as-root idempotency check (console shows titles, not ids).
 
-**One-line install** (`git clone … ~/ArCoN-v3 && ~/ArCoN-v3/setup.sh`): run as a normal sudo user on a fresh Ubuntu 24.04 minbase rootfs (debootstrap + chroot, no python3): `setup.sh` installed python3 + python3-venv, uv, and started `arcon` (`--version`, `doctor`, `plan` OK). Arch/Fedora path (uv from pacman/dnf): NOT TESTED.
+**One-line install** (`git clone … ~/FAI_LinOP && ~/FAI_LinOP/setup.sh`; tested before the rename as `~/ArCoN-v3` / `arcon`, NOT re-run under the new name): run as a normal sudo user on a fresh Ubuntu 24.04 minbase rootfs (debootstrap + chroot, no python3): `setup.sh` installed python3 + python3-venv, uv, and started `linop` (`--version`, `doctor`, `plan` OK). Arch/Fedora path (uv from pacman/dnf): NOT TESTED.
 
 ## Test status by level (2026-09-24)
 

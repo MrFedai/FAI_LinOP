@@ -6,7 +6,7 @@
 
 Run it on Arch, Debian, Ubuntu and Fedora (CI containers do this, Phase 7) and
 paste/merge the sections into docs/PACKAGE_CATALOG.md. Read-only: it only asks
-the package manager whether a name exists. Stdlib only, no ArCoN imports, so it
+the package manager whether a name exists. Stdlib only, no FAI_LinOP imports, so it
 runs in a bare container.
 """
 
@@ -22,7 +22,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-CATALOG = Path(__file__).resolve().parents[1] / "arcon" / "data" / "packages.toml"
+CATALOG = Path(__file__).resolve().parents[1] / "fai_linop" / "data" / "packages.toml"
 
 
 def os_id() -> str:

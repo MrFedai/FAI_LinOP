@@ -12,7 +12,7 @@ import re
 
 import pytest
 from conftest import GOLDEN, REPO, TEST_USER
-from dotfile_rules import ARCON_SOURCE, MONITOR_BEGIN, MONITOR_END, check
+from dotfile_rules import LINOP_SOURCE, MONITOR_BEGIN, MONITOR_END, check
 
 OWNER = json.loads((GOLDEN / "owner_settings.json").read_text())
 
@@ -54,7 +54,7 @@ def test_v3_gno_golden_obeys_d18():
 
 def test_v3_hyprlock_golden_obeys_d18():
     assert check("hyprlock", _read("configs/hypr/hyprlock.conf"), (GOLDEN / "v3" / "hyprlock.conf").read_text()) == []
-    assert (GOLDEN / "v3" / "hyprlock.conf").read_text().splitlines()[0] == ARCON_SOURCE
+    assert (GOLDEN / "v3" / "hyprlock.conf").read_text().splitlines()[0] == LINOP_SOURCE
 
 
 @pytest.mark.dconf

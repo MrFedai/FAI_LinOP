@@ -1,4 +1,6 @@
-# ArCoN v3 — progress log
+# FAI_LinOP v3 (formerly ArCoN v3) — progress log
+
+> The entries for Phases 1–8 were written before the rename and are kept as written: `arcon` there is today's `linop` command, `arcon/` is today's `fai_linop/` package.
 
 One entry per phase (CLAUDE.md, continuous mode). Format: done · evidence · NOT tested · risks · deviations · questions.
 
@@ -92,3 +94,10 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Evidence:** see FINAL_AUDIT — no FAIL; PASS areas are backed by integration runs in the Ubuntu container.
 - **NOT tested:** everything marked NOT TESTED / PARTIAL in FINAL_AUDIT; no VM or native run.
 - **Deviations:** none. Release (D27: merge to main, tag v3.0.0, archive the Bash branch) is **not** done — it waits for push access, a green CI run and the native checklist.
+
+## Rename — ArCoN v3 → FAI_LinOP (2026-11-27) · branch `rename/fai-linop`
+
+- **Done:** owner decision D29. Package `arcon/` → `fai_linop/`, command `arcon` → `linop`, own paths and file names `arcon` → `linop` (`~/.config/linop`, `~/.local/state/linop`, `configs/hypr/linop-colors.conf`, `99-linop-security.conf`, `10-linop.conf`), `ARCON_*` → `LINOP_*`, D18 monitor markers `# >>> FAI_LinOP monitors (generated) >>>`, repository URLs → `MrFedai/FAI_LinOP`. `tests/golden/v3/` and `tests/golden/sources.sha256` updated for the new marker text and the renamed colours file (its header comment changed, so its hash changed).
+- **Kept as ArCoN:** `legacy/`, `tests/characterization/`, `tests/golden/v25/`, `docs/AUDIT.md`, `docs/PRIOR_AUDIT.md`, `docs/PHASE_1_AUDIT_PROMPT.md`, the phase entries above, the wallpaper repo name, the test user `arcontest`.
+- **Owner dotfiles (D8):** `configs/gno.conf`, `configs/terminator/config`, `configs/hypr/hyprland.conf`, `hypridle.conf`, `hyprlock.conf` are byte-identical (`git status` shows no change; hashes in `sources.sha256` unchanged).
+- **Deviations:** D18 text changed (marker names, colours file name) — by owner instruction, recorded in D29.

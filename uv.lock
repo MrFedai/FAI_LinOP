@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
-name = "arcon"
+name = "fai-linop"
 version = "3.0.0.dev0"
 source = { editable = "." }
 dependencies = [

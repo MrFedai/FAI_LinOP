@@ -11,21 +11,21 @@ from conftest import GOLDEN, REPO
 from dotfile_rules import check
 from rich.console import Console
 
-from arcon.core.action import Context
-from arcon.core.profile import Profile
-from arcon.core.runner import FakeRunner, Result
-from arcon.core.ui import UI
-from arcon.display import hyprland
-from arcon.display.gnome import PERSISTENT, VERIFY, DisplayConfigError, GnomeDisplay, parse_state
-from arcon.display.model import Mode, Monitor, Placement, placements_from_profile, plan_layout, rank_modes
-from arcon.hardware.linux import detect as detect_hw
-from arcon.package import catalog as cat
-from arcon.package.actions import InstallAur, InstallAurHelper, InstallNative, read_custom_file
-from arcon.package.providers import Apt, Dnf, Pacman
-from arcon.package.resolve import resolve, wanted_entries
-from arcon.platform.detect import Family, OSInfo, Tier
-from arcon.recovery.backup import FileChanger
-from arcon.recovery.journal import Journal
+from fai_linop.core.action import Context
+from fai_linop.core.profile import Profile
+from fai_linop.core.runner import FakeRunner, Result
+from fai_linop.core.ui import UI
+from fai_linop.display import hyprland
+from fai_linop.display.gnome import PERSISTENT, VERIFY, DisplayConfigError, GnomeDisplay, parse_state
+from fai_linop.display.model import Mode, Monitor, Placement, placements_from_profile, plan_layout, rank_modes
+from fai_linop.hardware.linux import detect as detect_hw
+from fai_linop.package import catalog as cat
+from fai_linop.package.actions import InstallAur, InstallAurHelper, InstallNative, read_custom_file
+from fai_linop.package.providers import Apt, Dnf, Pacman
+from fai_linop.package.resolve import resolve, wanted_entries
+from fai_linop.platform.detect import Family, OSInfo, Tier
+from fai_linop.recovery.backup import FileChanger
+from fai_linop.recovery.journal import Journal
 
 ARCH = OSInfo(Family.ARCH, Tier.SUPPORTED, "arch", "Arch Linux")
 UBUNTU = OSInfo(Family.DEBIAN, Tier.SUPPORTED, "ubuntu", "Ubuntu")

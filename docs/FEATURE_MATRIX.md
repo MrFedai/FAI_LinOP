@@ -1,4 +1,4 @@
-# ArCoN v2.5 → v3.0 Feature Parity Matrix
+# ArCoN v2.5 → FAI_LinOP v3.0 Feature Parity Matrix
 
 Source of feature IDs: `docs/AUDIT.md` §2. Update this file in every phase.
 
@@ -15,9 +15,9 @@ Source of feature IDs: `docs/AUDIT.md` §2. Update this file in every phase.
 | F05 | Live-USB detection | core/preflight.py | fix (was commented out) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | F06 | OS detection | platform/detect.py | fix (parse, don't source) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | F07 | package-manager selection | package/providers.py | replace | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT; dry-run against real apt in Ubuntu 24.04 container) | MIGRATED (UNIT) | stub | stub |
-| F08 | package groups (76 → 7 groups, 70 kept, 6 removed: D28) | arcon/data/packages.toml | replace (per-distro names) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT; dry-run against real apt in Ubuntu 24.04 container) | MIGRATED (UNIT) | stub | stub |
+| F08 | package groups (76 → 7 groups, 70 kept, 6 removed: D28) | fai_linop/data/packages.toml | replace (per-distro names) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT; dry-run against real apt in Ubuntu 24.04 container) | MIGRATED (UNIT) | stub | stub |
 | F09 | main menu | cli.py / core/wizard.py | replace (D14) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
-| F10 | Smart Factory Reset | recovery/reset.py + `arcon reset` | fix (D19: explicit paths, protected list, verified backup) | partial | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
+| F10 | Smart Factory Reset | recovery/reset.py + `linop reset` | fix (D19: explicit paths, protected list, verified backup) | partial | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | F11 | resume | recovery/journal.py | fix (never worked) | n/a | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | MIGRATED (UNIT) | stub | stub |
 | F12 | GPG / keyring reset | system/actions.py | fix (opt-in reset) | no | MIGRATED (UNIT) | N-A | N-A | N-A | N-A | N-A |
 | F13 | reflector mirror benchmark | system/actions.py | keep + backup | yes | MIGRATED (UNIT) | N-A | N-A | N-A | N-A | N-A |

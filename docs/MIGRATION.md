@@ -1,4 +1,4 @@
-# Migrating from ArCoN v2.5 to v3
+# Migrating from ArCoN v2.5 to FAI_LinOP v3
 
 v2.5 CLI compatibility is not provided (D7). This guide maps every v2.5 prompt to v3.
 
@@ -11,18 +11,18 @@ v2.5 CLI compatibility is not provided (D7). This guide maps every v2.5 prompt t
 
 | v2.5 | v3 |
 |---|---|
-| `chmod +x setup.sh && ./setup.sh` | `./setup.sh` (same file name, now a bootstrap for `arcon`) |
-| prompts during the whole install | all questions first (`arcon wizard`), then one confirmation |
-| — | `arcon plan` (dry run), `arcon resume`, `arcon rollback`, `arcon runs` |
+| `chmod +x setup.sh && ./setup.sh` | `./setup.sh` (same file name, now a bootstrap for `linop`) |
+| prompts during the whole install | all questions first (`linop wizard`), then one confirmation |
+| — | `linop plan` (dry run), `linop resume`, `linop rollback`, `linop runs` |
 | `sudo ./setup.sh` | refused — run as your user |
 
 ## Prompt → profile key
 
 | v2.5 prompt / menu | v3 profile |
 |---|---|
-| Main menu 1) install | `arcon` / `arcon apply` |
-| Main menu 2) Smart Factory Reset | `arcon reset [--uninstall] [--gnome]` |
-| Resume from last checkpoint | `arcon resume` (it works now) |
+| Main menu 1) install | `linop` / `linop apply` |
+| Main menu 2) Smart Factory Reset | `linop reset [--uninstall] [--gnome]` |
+| Resume from last checkpoint | `linop resume` (it works now) |
 | Update Base System (Mirrors/Keyrings) | `[modules] system`, `[system] upgrade / mirrors / keyring_reset / speedtest` |
 | Apply GNOME Settings | `[modules] gnome` |
 | Remove GNOME Bloatware | `[gnome] debloat` |

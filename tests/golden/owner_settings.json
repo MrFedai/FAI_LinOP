@@ -1,5 +1,5 @@
 {
-  "_comment": "Owner settings that must survive every ArCoN version unchanged (CLAUDE.md D8). dconf values are in `dconf read` format.",
+  "_comment": "Owner settings that must survive every FAI_LinOP version unchanged (CLAUDE.md D8). dconf values are in `dconf read` format.",
   "dconf": {
     "/org/gnome/desktop/interface/color-scheme": "'prefer-dark'",
     "/org/gnome/desktop/interface/gtk-theme": "'adw-gtk3-dark'",

@@ -2,17 +2,19 @@
 
 ## 3.0.0 — unreleased (branch `v3-dev`)
 
-Complete rewrite of the 1885-line v2.5 Bash script in Python 3.11+ (`arcon`). v2.5 stays in `legacy/v2.5/` and at tag `v2.5.0`.
+Complete rewrite of the 1885-line ArCoN v2.5 Bash script in Python 3.11+ (`linop`). v2.5 stays in `legacy/v2.5/` and at tag `v2.5.0`.
+
+**Renamed (2026-11-27):** ArCoN v3 is now **FAI_LinOP**. Command `arcon` → `linop`, Python package `arcon` → `fai_linop`, own directories `~/.config/arcon`, `~/.local/state/arcon` → `~/.config/linop`, `~/.local/state/linop`, environment variables `ARCON_*` → `LINOP_*`. ArCoN v2.5 keeps its name.
 
 ### New
 - One profile (TOML) instead of ~40 prompts during the install; wizard asks everything first, then **one** confirmation.
-- `arcon plan` (dry run), `resume`, `rollback`, `runs`, `doctor`, `display show|capture`, `dotfiles diff|capture`, `profile init|show|validate`, `reset`.
+- `linop plan` (dry run), `resume`, `rollback`, `runs`, `doctor`, `display show|capture`, `dotfiles diff|capture`, `profile init|show|validate`, `reset`.
 - JSON-lines journal for every run; verified per-file backups; GNOME settings backed up with `dconf dump`; Snapper/Timeshift snapshot when configured.
 - Monitors: best mode per monitor detected, owner's layout kept, fallback when a mode does not work (GNOME via Mutter, Hyprland generated block).
 - GPU detection (NVIDIA open modules / DKMS + headers / PRIME, AMD, Intel) — no more GPU menu.
 - Debian, Ubuntu and Fedora support through a per-distro package catalog with Flatpak fallback.
 - Package groups reorganised: base, essentials, media, cyber, remote, privacy, power.
-- One-line install: `git clone https://github.com/MrFedai/ArCoN-v3.git ~/ArCoN-v3 && ~/ArCoN-v3/setup.sh`; on Debian/Ubuntu `setup.sh` installs `python3-venv` itself when it is missing.
+- One-line install: `git clone https://github.com/MrFedai/FAI_LinOP.git ~/FAI_LinOP && ~/FAI_LinOP/setup.sh`; on Debian/Ubuntu `setup.sh` installs `python3-venv` itself when it is missing.
 
 ### Fixed (v2.5 bugs)
 - Resume never worked (log was never written).

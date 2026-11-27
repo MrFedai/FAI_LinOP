@@ -9,24 +9,24 @@ import pytest
 from conftest import GOLDEN, REPO
 from rich.console import Console
 
-from arcon.core.action import Context
-from arcon.core.profile import Profile
-from arcon.core.runner import FakeRunner, Result
-from arcon.core.ui import UI
-from arcon.desktop.gnome import ApplyGnomeSettings, dconf_keys, render_gno
-from arcon.dotfiles import manager
-from arcon.dotfiles.rules import check
-from arcon.gaming.actions import gpu_packages
-from arcon.hardware.linux import GPU, Hardware
-from arcon.optimization.actions import Cache, _bluetooth
-from arcon.platform.detect import Family, OSInfo, Tier
-from arcon.core import preflight
-from arcon.recovery.backup import FileChanger, dconf_user, restore_files
-from arcon.recovery.journal import Journal
-from arcon.recovery.reset import CONFIGS, PROTECTED, ResetConfigs, ResetPackages
-from arcon.security.actions import SYSCTL, Firewall, SshDropIn
-from arcon.system.actions import enable_multilib
-from arcon.terminal.actions import PINS, ChangeShell, _zshrc_edit
+from fai_linop.core.action import Context
+from fai_linop.core.profile import Profile
+from fai_linop.core.runner import FakeRunner, Result
+from fai_linop.core.ui import UI
+from fai_linop.desktop.gnome import ApplyGnomeSettings, dconf_keys, render_gno
+from fai_linop.dotfiles import manager
+from fai_linop.dotfiles.rules import check
+from fai_linop.gaming.actions import gpu_packages
+from fai_linop.hardware.linux import GPU, Hardware
+from fai_linop.optimization.actions import Cache, _bluetooth
+from fai_linop.platform.detect import Family, OSInfo, Tier
+from fai_linop.core import preflight
+from fai_linop.recovery.backup import FileChanger, dconf_user, restore_files
+from fai_linop.recovery.journal import Journal
+from fai_linop.recovery.reset import CONFIGS, PROTECTED, ResetConfigs, ResetPackages
+from fai_linop.security.actions import SYSCTL, Firewall, SshDropIn
+from fai_linop.system.actions import enable_multilib
+from fai_linop.terminal.actions import PINS, ChangeShell, _zshrc_edit
 
 ARCH = OSInfo(Family.ARCH, Tier.SUPPORTED, "arch", "Arch Linux")
 UBUNTU = OSInfo(Family.DEBIAN, Tier.SUPPORTED, "ubuntu", "Ubuntu")
@@ -246,7 +246,7 @@ def test_capture_hyprland_restores_original_monitor_lines(tmp_path):
     (ctx.home / d.target).write_text(live)
     assert manager.capture(ctx, d)
     captured = (repo / d.source).read_text()
-    assert "kb_layout = tr" in captured and "ArCoN monitors" not in captured
+    assert "kb_layout = tr" in captured and "FAI_LinOP monitors" not in captured
     assert "monitor=HDMI-A-1, 1920x1080@180, 0x0, 1" in captured
 
 
@@ -288,7 +288,7 @@ def test_live_environment_detection(tmp_path):
 
 
 def test_stale_pacman_lock_is_asked_not_silently_removed(tmp_path, monkeypatch):
-    monkeypatch.setenv("ARCON_SKIP_SUDO_CHECK", "1")
+    monkeypatch.setenv("LINOP_SKIP_SUDO_CHECK", "1")
     lock = tmp_path / "var" / "lib" / "pacman"
     lock.mkdir(parents=True)
     (lock / "db.lck").write_text("")

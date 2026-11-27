@@ -1,3 +1,3 @@
 NAME="Evil"
-ID=$(touch /tmp/arcon-pwned)
-PRETTY_NAME="`touch /tmp/arcon-pwned2`"
+ID=$(touch /tmp/linop-pwned)
+PRETTY_NAME="`touch /tmp/linop-pwned2`"

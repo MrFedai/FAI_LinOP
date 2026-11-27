@@ -1,4 +1,6 @@
-# ArCoN v3.0 — final audit (2026-09-24)
+# FAI_LinOP v3.0 — final audit (2026-09-24)
+
+> Audited under the former name "ArCoN v3". The project was renamed on 2026-11-27 (CLAUDE.md D29); commands below use the new name `linop`. No verdict was re-tested after the rename.
 
 Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths tested) · **NOT TESTED** (implemented, never executed for real) · **FAIL**.
 "Container" never validates GPU, monitors, a real desktop session or hardware.
@@ -19,7 +21,7 @@ Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths teste
 | System upgrade / multilib / mirrors / keyring reset | PARTIAL | UNIT | text transforms tested; commands never executed |
 | GNOME settings (F17) | PASS | INTEGRATION | real dconf database via dbus-run-session; rollback restores |
 | GNOME debloat (F18) | PARTIAL | UNIT | |
-| Display D13 — GNOME | PARTIAL | UNIT (fake Mutter) | **no live Mutter session** — first native run must be `arcon plan` (Mutter verify mode) |
+| Display D13 — GNOME | PARTIAL | UNIT (fake Mutter) | **no live Mutter session** — first native run must be `linop plan` (Mutter verify mode) |
 | Display D13 — Hyprland | PARTIAL | UNIT | `desc:` matching not checked on real Hyprland |
 | Gaming / GPU drivers (F19) | PARTIAL | UNIT | package selection per GPU tested; no driver installed anywhere |
 | Dotfiles deploy/diff/capture (F23, N2) | PASS | INTEGRATION | Terminator config deployed byte-identical in the real run |
@@ -40,9 +42,9 @@ No FAIL verdicts. Every v2.5 feature is in `docs/FEATURE_MATRIX.md` (keep / repl
 
 ## Known risks before the first native run
 
-1. **Mutter D-Bus API** is implemented from the interface description and tested only against a fake. `arcon plan` uses Mutter's *verify* method — it cannot change the screens — so run `plan` first and check the Display rows.
-2. **NVIDIA:** the open-module decision uses the PCI device id (≥ 0x1E00 = Turing+). Check `arcon doctor` shows "open modules ok" for your card before enabling gaming.
-3. **AUR as root** fails by design (makepkg); run ArCoN as your user.
+1. **Mutter D-Bus API** is implemented from the interface description and tested only against a fake. `linop plan` uses Mutter's *verify* method — it cannot change the screens — so run `plan` first and check the Display rows.
+2. **NVIDIA:** the open-module decision uses the PCI device id (≥ 0x1E00 = Turing+). Check `linop doctor` shows "open modules ok" for your card before enabling gaming.
+3. **AUR as root** fails by design (makepkg); run FAI_LinOP as your user.
 4. **Catalog on Arch** is not verified yet — run `python3 scripts/verify_catalog.py` once on your machine.
 
 ## Native checklist (owner's Arch machine, NVIDIA, GNOME)
@@ -60,4 +62,4 @@ python3 scripts/verify_catalog.py > /tmp/catalog.md  # Arch column: any MISSING?
 ./setup.sh runs                                      # and, if needed: ./setup.sh rollback
 ```
 
-Report back: `arcon runs`, the run's `journal.jsonl`, and anything that looked wrong. Each passing item moves from UNIT/INTEGRATION to NATIVE TESTED in `docs/FEATURE_MATRIX.md`.
+Report back: `linop runs`, the run's `journal.jsonl`, and anything that looked wrong. Each passing item moves from UNIT/INTEGRATION to NATIVE TESTED in `docs/FEATURE_MATRIX.md`.

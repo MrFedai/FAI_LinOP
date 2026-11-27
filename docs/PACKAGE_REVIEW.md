@@ -8,18 +8,18 @@ packages that **do not fit the owner's setup** (GNOME on Wayland, Arch, NVIDIA).
 
 | # | Finding | Packages |
 |---|---|---|
-| 1 | ArCoN's own prerequisites mixed into "Essentials" | `git`, `curl`, `wget` (also in PROTECTED), `unzip`, `zip`, `man-db`, `man-pages`, `ntfs-3g`, `dosfstools` |
+| 1 | FAI_LinOP's own prerequisites mixed into "Essentials" | `git`, `curl`, `wget` (also in PROTECTED), `unzip`, `zip`, `man-db`, `man-pages`, `ntfs-3g`, `dosfstools` |
 | 2 | Two editors of the same family | `vim` + `neovim` (both also PROTECTED) |
 | 3 | Three browsers in three groups | `google-chrome` (Essentials), `firefox` (Media), `torbrowser-launcher` (Remote) |
 | 4 | VPN / privacy spread over three groups | `riseup-vpn` (Essentials); `openvpn`, `networkmanager-openvpn`, `wireguard-tools`, `proton-vpn-gtk-app`, `torbrowser-launcher` (Remote); `onionshare`, `metadata-cleaner` (Power) |
 | 5 | Remote-desktop clients in the Cyber group | `remmina`, `freerdp` (Cyber) vs `anydesk-bin`, `rustdesk-bin` (Remote) |
 | 6 | X11-only tool on a Wayland desktop | `x11vnc` — does not share a GNOME Wayland session (GNOME has built-in Remote Desktop/RDP) |
 | 7 | Screenshot tool duplicated by GNOME | `flameshot` — gno.conf already binds `<Alt>t` to GNOME's screenshot UI; Flameshot on Wayland needs extra portal setup |
-| 8 | System cleaners/optimizers overlapping with ArCoN's optimization module | `stacer`, `bleachbit`, `ananicy-cpp` (ArCoN enables ananicy itself) |
+| 8 | System cleaners/optimizers overlapping with FAI_LinOP's optimization module | `stacer`, `bleachbit`, `ananicy-cpp` (FAI_LinOP enables ananicy itself) |
 | 9 | Two batch image converters | `switcheroo` + `converseen` |
 | 10 | Server / heavyweight apps, not desktop utilities | `stirling-pdf` (self-hosted web service), `pinokio` (AI app launcher, large downloads) |
 | 11 | Cyber group overlaps the BlackArch module | all 16 cyber tools exist in BlackArch groups; selecting both installs them twice-resolved but slows planning |
-| 12 | `timeshift` in Essentials but it is ArCoN's rollback dependency (D6) | move to recovery |
+| 12 | `timeshift` in Essentials but it is FAI_LinOP's rollback dependency (D6) | move to recovery |
 
 Maintenance status of `stacer` (upstream activity) is NOT verified here — check before release.
 
@@ -39,7 +39,7 @@ Maintenance status of `stacer` (upstream activity) is NOT verified here — chec
 
 ## Decision (owner, 2026-09-24) — CLAUDE.md D28
 
-Structure approved. Removal list left to ArCoN for the first four; owner chose flameshot and switcheroo.
+Structure approved. Removal list left to FAI_LinOP for the first four; owner chose flameshot and switcheroo.
 
 | Group | Packages | Count |
 |---|---|---|

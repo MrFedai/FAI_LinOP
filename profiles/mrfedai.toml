@@ -1,6 +1,6 @@
-# ArCoN profile of the owner (CLAUDE.md D26, D28).
+# FAI_LinOP profile of the owner (CLAUDE.md D26, D28).
 # Use it with:  ./setup.sh --profile profiles/mrfedai.toml
-# Every key is optional; missing keys use ArCoN defaults (`arcon profile show`).
+# Every key is optional; missing keys use FAI_LinOP defaults (`linop profile show`).
 
 [profile]
 name = "mrfedai"

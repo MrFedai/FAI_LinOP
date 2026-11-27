@@ -10,17 +10,17 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from arcon.core.action import Action, Change, Context, Reversible, Risk, clear_registry, register
-from arcon.core.engine import build_plan, collect_actions, execute, report
-from arcon.core.paths import Paths
-from arcon.core.profile import Profile, ProfileError, validate
-from arcon.core.runner import CommandError, DryRunRunner, FakeRunner, Result, SystemRunner
-from arcon.core.ui import UI
-from arcon.core.wizard import QUESTIONS, run_wizard
-from arcon.package.base import Homebrew, NotSupported, Winget
-from arcon.platform.detect import Family, OSInfo, Tier, classify, detect, parse_os_release
-from arcon.recovery.backup import FileChanger, restore_files
-from arcon.recovery.journal import DONE, FAILED, Journal
+from fai_linop.core.action import Action, Change, Context, Reversible, Risk, clear_registry, register
+from fai_linop.core.engine import build_plan, collect_actions, execute, report
+from fai_linop.core.paths import Paths
+from fai_linop.core.profile import Profile, ProfileError, validate
+from fai_linop.core.runner import CommandError, DryRunRunner, FakeRunner, Result, SystemRunner
+from fai_linop.core.ui import UI
+from fai_linop.core.wizard import QUESTIONS, run_wizard
+from fai_linop.package.base import Homebrew, NotSupported, Winget
+from fai_linop.platform.detect import Family, OSInfo, Tier, classify, detect, parse_os_release
+from fai_linop.recovery.backup import FileChanger, restore_files
+from fai_linop.recovery.journal import DONE, FAILED, Journal
 
 FIX = Path(__file__).resolve().parents[1] / "fixtures" / "os"
 ARCH = OSInfo(Family.ARCH, Tier.SUPPORTED, "arch", "Arch Linux")
@@ -40,7 +40,7 @@ def test_system_runner_runs_and_reports():
 
 
 def test_system_runner_missing_command_is_127():
-    assert SystemRunner().run(["arcon-no-such-cmd"], check=False).returncode == 127
+    assert SystemRunner().run(["linop-no-such-cmd"], check=False).returncode == 127
 
 
 def test_system_runner_check_raises():
@@ -80,7 +80,7 @@ def test_os_fixtures(name, family, tier):
 def test_os_release_is_never_executed(tmp_path):
     info = detect(FIX / "malicious.os-release", system="Linux")
     assert info.tier is Tier.UNSUPPORTED
-    assert not Path("/tmp/arcon-pwned").exists() and not Path("/tmp/arcon-pwned2").exists()
+    assert not Path("/tmp/linop-pwned").exists() and not Path("/tmp/linop-pwned2").exists()
 
 
 def test_windows_and_macos_are_stubs():
@@ -283,7 +283,7 @@ def test_typed_confirmation_never_auto_yes():
 # ---- CLI --------------------------------------------------------------------------------
 
 def _app(tmp_path, command, os_info=ARCH, answers=(), yes=False, dry=False):
-    from arcon.cli import App
+    from fai_linop.cli import App
     args = argparse.Namespace(command=command, profile=None, dry_run=dry, yes=yes, keep_going=False,
                               verbose=False, run_id=None, what="show")
     ui, out = ui_with(answers, yes)
@@ -307,16 +307,16 @@ def test_cli_full_flow_confirm_apply_rollback(tmp_path):
 
     class Edit(Touch):
         def plan(self, ctx):
-            return [] if target.read_text() == "arcon\n" else [Change("file", str(target))]
+            return [] if target.read_text() == "linop\n" else [Change("file", str(target))]
 
         def apply(self, ctx):
-            ctx.files.write(target, b"arcon\n")
+            ctx.files.write(target, b"linop\n")
 
     try:
         register("dotfiles", "Dotfiles")(lambda ctx: [Edit("edit", target)])
         app, out = _app(tmp_path, "apply", answers=["y"])
-        assert app.cmd_apply() == 0 and target.read_text() == "arcon\n"
-        assert "ArCoN plan" in out.getvalue()
+        assert app.cmd_apply() == 0 and target.read_text() == "linop\n"
+        assert "FAI_LinOP plan" in out.getvalue()
         app, _ = _app(tmp_path, "runs")
         assert app.cmd_runs() == 0
         app, _ = _app(tmp_path, "rollback", answers=["y"])
@@ -329,17 +329,17 @@ def test_cli_full_flow_confirm_apply_rollback(tmp_path):
 
 
 def test_cli_root_guard(monkeypatch, capsys):
-    import arcon.cli as cli
+    import fai_linop.cli as cli
     monkeypatch.setattr(cli, "_is_root", lambda: True)
-    monkeypatch.delenv("ARCON_ALLOW_ROOT", raising=False)
+    monkeypatch.delenv("LINOP_ALLOW_ROOT", raising=False)
     assert cli.main(["apply"]) == 2
     assert "normal user" in capsys.readouterr().err
 
 
 def test_profile_template_is_valid_and_complete():
     import tomllib
-    from arcon.core.profile import SCHEMA
-    path = Path(__file__).resolve().parents[2] / "arcon" / "data" / "profile.template.toml"
+    from fai_linop.core.profile import SCHEMA
+    path = Path(__file__).resolve().parents[2] / "fai_linop" / "data" / "profile.template.toml"
     data = tomllib.loads(path.read_text())
     Profile.load(path)
     for section, keys in SCHEMA.items():
@@ -350,7 +350,7 @@ def test_profile_template_is_valid_and_complete():
 
 
 def test_global_options_after_the_command():
-    from arcon.cli import _parser
+    from fai_linop.cli import _parser
     args = _parser().parse_args(["plan", "--profile", "x.toml", "-v"])
     assert args.command == "plan" and str(args.profile) == "x.toml" and args.verbose
     args = _parser().parse_args(["--profile", "y.toml", "apply"])
