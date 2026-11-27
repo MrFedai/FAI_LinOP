@@ -1,6 +1,6 @@
 # FAI_LinOP v3.0 — final audit (2026-09-24)
 
-> Audited under the former name "ArCoN v3". The project was renamed on 2026-11-27 (CLAUDE.md D29); commands below use the new name `linop`. No verdict was re-tested after the rename.
+> Audited under the former name "ArCoN v3". The project was renamed on 2026-11-27 (CLAUDE.md D29); commands below use the new name `linop`. After the rename, CI run 46033064904 (commit `29386b2`) passed: lint, unit, and the distro jobs (catalog check, dry run, real apply + rollback) in archlinux, debian:stable, ubuntu:24.04 and fedora containers. Nothing native was re-tested; every NOT TESTED / PARTIAL verdict below stands.
 
 Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths tested) · **NOT TESTED** (implemented, never executed for real) · **FAIL**.
 "Container" never validates GPU, monitors, a real desktop session or hardware.

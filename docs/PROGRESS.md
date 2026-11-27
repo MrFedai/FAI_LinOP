@@ -95,9 +95,11 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **NOT tested:** everything marked NOT TESTED / PARTIAL in FINAL_AUDIT; no VM or native run.
 - **Deviations:** none. Release (D27: merge to main, tag v3.0.0, archive the Bash branch) is **not** done — it waits for push access, a green CI run and the native checklist.
 
-## Rename — ArCoN v3 → FAI_LinOP (2026-11-27) · branch `rename/fai-linop`
+## Rename — ArCoN v3 → FAI_LinOP (2026-11-27) · commit `29386b2`
 
 - **Done:** owner decision D29. Package `arcon/` → `fai_linop/`, command `arcon` → `linop`, own paths and file names `arcon` → `linop` (`~/.config/linop`, `~/.local/state/linop`, `configs/hypr/linop-colors.conf`, `99-linop-security.conf`, `10-linop.conf`), `ARCON_*` → `LINOP_*`, D18 monitor markers `# >>> FAI_LinOP monitors (generated) >>>`, repository URLs → `MrFedai/FAI_LinOP`. `tests/golden/v3/` and `tests/golden/sources.sha256` updated for the new marker text and the renamed colours file (its header comment changed, so its hash changed).
 - **Kept as ArCoN:** `legacy/`, `tests/characterization/`, `tests/golden/v25/`, `docs/AUDIT.md`, `docs/PRIOR_AUDIT.md`, `docs/PHASE_1_AUDIT_PROMPT.md`, the phase entries above, the wallpaper repo name, the test user `arcontest`.
 - **Owner dotfiles (D8):** `configs/gno.conf`, `configs/terminator/config`, `configs/hypr/hyprland.conf`, `hypridle.conf`, `hyprlock.conf` are byte-identical (`git status` shows no change; hashes in `sources.sha256` unchanged).
+- **Evidence:** local `pytest`: 132 passed, 3 skipped (UNIT, Ubuntu 26.04). CI run 46033064904 on `29386b2`: lint, unit, distro × {archlinux, debian:stable, ubuntu:24.04, fedora} all `success` (INTEGRATION, container). GitHub repository renamed to `MrFedai/FAI_LinOP` by the owner; fast-forwarded into `main` and pushed.
+- **NOT tested:** native run on the owner's Arch machine; `setup.sh` one-line install under the new name (CI only ShellChecks it).
 - **Deviations:** D18 text changed (marker names, colours file name) — by owner instruction, recorded in D29.
