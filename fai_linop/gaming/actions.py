@@ -10,6 +10,7 @@ from fai_linop.core.common import WriteFile
 from fai_linop.core.paths import current_user
 from fai_linop.hardware.linux import Hardware, detect
 from fai_linop.package.actions import request
+from fai_linop.package.providers import native_for
 from fai_linop.platform.detect import Family
 
 GAMEMODE_INI = "[general]\ndesiredgov=performance\nigpu_desiredgov=performance\n"
@@ -82,6 +83,28 @@ class GamemodeGroup(Action):
         ctx.runner.run(["usermod", "-aG", "gamemode", current_user()], sudo=True)
 
 
+class NvidiaRebootNotice(Action):
+    """Warns that the NVIDIA kernel module loads only after a reboot. Changes nothing;
+    planned only while the requested driver packages are missing, so it fires in the
+    run that installs them (not when gamemode.ini is merely up to date)."""
+    id, title = "gaming.nvidia-reboot", "NVIDIA driver: reboot to load the kernel module"
+    risk, reversible = Risk.LOW, Reversible.YES
+    requires = ("packages.native",)
+    reboot = True
+
+    def __init__(self, names):
+        self.names = list(names)
+
+    def plan(self, ctx):
+        missing = set(self.names) - native_for(ctx.os, ctx.runner).installed(self.names)
+        if not missing:
+            return []
+        return [Change("command", "reboot", f"NVIDIA driver not active until reboot: {', '.join(sorted(missing))}")]
+
+    def apply(self, ctx):
+        pass  # no-op: the engine prints the reboot warning once this action is done
+
+
 @register("gaming", "Gaming", order=50)
 def build(ctx: Context):
     hw = hardware(ctx)
@@ -94,6 +117,7 @@ def build(ctx: Context):
                     ctx.home / ".config" / "gamemode.ini", lambda c: GAMEMODE_INI)
     # v2.5 wrote ~/.config/gamemode/gamemode.ini, which GameMode never reads (D-08)
     actions = [ini, GamemodeGroup(), UbuntuNvidia()]
-    if any(i.startswith("nvidia") for i in ids):
-        actions[0].reboot = True
+    nvidia = [i for i in ids if i.startswith("nvidia")]  # Arch: catalog ids are the native names
+    if nvidia:
+        actions.append(NvidiaRebootNotice(nvidia))
     return actions

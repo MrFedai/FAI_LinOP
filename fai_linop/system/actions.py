@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
 from fai_linop.core.common import WriteFile, read_text
+from fai_linop.package.base import NotSupported
 from fai_linop.platform.detect import Family
 
 PACMAN_CONF = Path("/etc/pacman.conf")
@@ -96,6 +97,15 @@ class Mirrors(Action):
                 ctx.files.write(MIRRORLIST, text.encode(), root=True, mode=0o644)
 
 
+# One transaction per family. Arch: `-Syu` is the full upgrade and the keyring rides in
+# the same transaction (a separate `-Sy keyring` + `-Su` would be a partial upgrade).
+UPGRADE_COMMANDS = {
+    Family.ARCH: "pacman -Syu --needed --noconfirm archlinux-keyring",
+    Family.DEBIAN: "apt-get update && apt-get full-upgrade",
+    Family.FEDORA: "dnf upgrade --refresh",
+}
+
+
 class Upgrade(Action):
     id, title = "system.upgrade", "Full system upgrade"
     risk, reversible = Risk.MEDIUM, Reversible.NO
@@ -104,21 +114,23 @@ class Upgrade(Action):
     def plan(self, ctx):
         if not ctx.profile.get("system", "upgrade"):
             return []
-        return [Change("command", {Family.ARCH: "pacman -Sy archlinux-keyring && pacman -Su",
-                                   Family.DEBIAN: "apt-get update && apt-get full-upgrade",
-                                   Family.FEDORA: "dnf upgrade --refresh"}[ctx.os.family])]
+        command = UPGRADE_COMMANDS.get(ctx.os.family)
+        if command is None:  # unknown family: report it, no KeyError traceback
+            return [Change("command", f"not supported on {ctx.os.family.value}", "no upgrade path for this family")]
+        return [Change("command", command)]
 
     def apply(self, ctx):
         r = ctx.runner
         if ctx.os.family is Family.ARCH:
-            r.run(["pacman", "-Sy", "--needed", "--noconfirm", "archlinux-keyring"], sudo=True, interactive=True)
-            r.run(["pacman", "-Su", "--noconfirm"], sudo=True, interactive=True)
+            r.run(["pacman", "-Syu", "--needed", "--noconfirm", "archlinux-keyring"], sudo=True, interactive=True)
         elif ctx.os.family is Family.DEBIAN:
             env = ["env", "DEBIAN_FRONTEND=noninteractive"]
             r.run([*env, "apt-get", "update"], sudo=True, interactive=True)
             r.run([*env, "apt-get", "full-upgrade", "-y"], sudo=True, interactive=True)
         elif ctx.os.family is Family.FEDORA:
             r.run(["dnf", "upgrade", "--refresh", "-y"], sudo=True, interactive=True)
+        else:
+            raise NotSupported(f"system upgrade on {ctx.os.family.value} is not supported")
 
 
 @register("system", "System", order=10)
