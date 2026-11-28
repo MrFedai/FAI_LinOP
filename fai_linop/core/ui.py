@@ -14,8 +14,9 @@ InputFn = Callable[[str], str]
 
 class UI:
     def __init__(self, console: Console | None = None, input_fn: InputFn | None = None,
-                 assume_yes: bool = False, interactive: bool | None = None):
+                 assume_yes: bool = False, interactive: bool | None = None, verbose: bool = False):
         self.console = console or Console()
+        self.verbose = verbose   # -v: full tables instead of the short summary (D30)
         self._input = input_fn or (lambda prompt: self.console.input(prompt))
         self.assume_yes = assume_yes
         self.interactive = sys.stdin.isatty() if interactive is None else interactive

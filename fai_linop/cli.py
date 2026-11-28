@@ -1,10 +1,10 @@
 """`linop` command line.
 
-    linop                 wizard → plan → one confirmation → apply  (the v2.5 flow, D14)
+    linop                 staged setup: one module at a time — ask, review, apply (D30)
     linop plan            show what would change (dry run)
-    linop apply           apply the saved profile without the wizard
-    linop wizard          only (re)answer the questions and save the profile
-    linop resume          continue the last real apply run
+    linop apply           apply the saved profile in one go (unattended: add --yes)
+    linop wizard          only (re)answer all questions and save the profile
+    linop resume          continue the last real run
     linop rollback [RUN]  restore files changed by a real apply / reset run (default: the last one;
                           packages are never "rolled back" silently)
     linop runs            list previous apply / reset / rollback runs (dry runs are not listed)
@@ -38,7 +38,9 @@ EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_UNSUPPORTED = 0, 1, 2, 3
 EXIT_PARTIAL = 4   # the run finished, but some packages failed to install (see the report table)
 
 
-EPILOG = """without a command: wizard -> plan -> one confirmation -> apply (the v2.5 flow)
+EPILOG = """without a command: staged setup — per module: question -> short summary -> confirm -> apply
+
+output is short by default; -v shows the full tables (every package name)
 
 examples:
   linop plan                                   what would change (dry run)
@@ -60,7 +62,8 @@ def _common(defaults: bool) -> argparse.ArgumentParser:
                    help="answer yes to normal confirmations (never to typed ones)")
     p.add_argument("--keep-going", action="store_true", default=d(False),
                    help="continue with other actions after a failure")
-    p.add_argument("-v", "--verbose", action="store_true", default=d(False))
+    p.add_argument("-v", "--verbose", action="store_true", default=d(False),
+                   help="full tables instead of the short summary; debug level in the log file")
     return p
 
 
@@ -97,7 +100,7 @@ class App:
     def __init__(self, args: argparse.Namespace, ui: UI | None = None, runner: Runner | None = None,
                  paths: Paths | None = None, os_info: OSInfo | None = None, repo_root: Path = REPO_ROOT):
         self.args = args
-        self.ui = ui or UI(assume_yes=args.yes)
+        self.ui = ui or UI(assume_yes=args.yes, verbose=args.verbose)
         self.paths = paths or Paths.from_env()
         self.os = os_info or detect()
         self.repo_root = repo_root
@@ -122,18 +125,17 @@ class App:
                        files=FileChanger(journal, DryRunRunner(probe=self.runner)), ui=self.ui,
                        repo_root=self.repo_root, home=self.paths.home)
 
-    def save_profile(self, profile: Profile, what: str = "Profile") -> None:
+    def save_profile(self, profile: Profile, what: str = "Profile", quiet: bool = False) -> None:
         """Save the profile — except in a dry run, which writes no file (1.3)."""
         if self.runner.dry_run:
-            self.ui.info(f"would save {what.lower()} to {self.profile_path} (dry run, nothing written)")
+            if not quiet:
+                self.ui.info(f"would save {what.lower()} to {self.profile_path} (dry run, nothing written)")
             return
         path = profile.save(self.profile_path)
-        self.ui.ok(f"{what} saved: {path}")
+        if not quiet:
+            self.ui.ok(f"{what} saved: {path}")
 
     def guard_platform(self) -> int | None:
-        if self.os.tier is Tier.STUB:
-            self.ui.error(f"{self.os.name}: FAI_LinOP v3.0 ships interfaces only for this platform — nothing is applied.")
-            return EXIT_UNSUPPORTED
         if self.os.tier is Tier.UNSUPPORTED:
             self.ui.error(f"{self.os.name} ({self.os.id or 'unknown'}) is not supported. Supported: Arch, Debian, Ubuntu, Fedora.")
             return EXIT_UNSUPPORTED
@@ -142,20 +144,86 @@ class App:
         return None
 
     # ---- the run ----------------------------------------------------------------
-    def run_profile(self, profile: Profile, resume_from: Journal | None = None) -> int:
-        blocked = self.guard_platform()
-        if blocked is not None:
-            return blocked
+    def _start(self, profile: Profile, resume_from: Journal | None, **meta) -> tuple[Context, set[str]]:
+        """Open the journal and the log of an apply run; returns the context and the
+        actions a resumed run has already finished."""
         done: set[str] = set()
         if resume_from is not None and not resume_from.dry_run:   # a dry run marked nothing as really done
             done = {k for k, v in resume_from.action_status().items() if v == DONE}
         journal = Journal.create(self.paths.runs, command="apply", profile=str(profile.path),
                                  dry_run=self.runner.dry_run, os=self.os.id,
-                                 resumed_from=resume_from.run_id if resume_from else None)
+                                 resumed_from=resume_from.run_id if resume_from else None, **meta)
         setup_file_logging(journal.run_dir / "linop.log", self.args.verbose)
-        ctx = self.context(profile, journal)
         from fai_linop import modules
         modules.load()
+        return self.context(profile, journal), done
+
+    def _prepare(self, ctx: Context) -> bool:
+        """Preflight checks and the snapshot — right before the first real change."""
+        from fai_linop.core import preflight
+        journal = ctx.journal
+        if not preflight.run(self.os, self.runner, self.ui, needs_network=True, dry_run=False,
+                             speedtest=ctx.profile.get("system", "speedtest")):
+            self.ui.error("Preflight checks failed — nothing was changed.")
+            return False
+        provider = snapshot.detect(self.runner)
+        if provider:
+            ok = provider.create(self.runner, f"linop {journal.run_id}")
+            journal.write("snapshot", provider=provider.name, ok=ok)
+            (self.ui.ok if ok else self.ui.warn)(f"{provider.name} snapshot {'created' if ok else 'FAILED'}")
+        else:
+            journal.write("snapshot", provider=None)
+            self.ui.info("No filesystem snapshot tool configured — changed files are backed up individually.")
+        return True
+
+    def _finish(self, ctx: Context, plan) -> int:
+        """The report, the exit code and the reboot question."""
+        code = report(ctx, plan)
+        if not self.runner.dry_run:
+            from fai_linop.hardware.linux import detect as detect_hw
+            from fai_linop.hardware.linux import modeset_note
+            note = modeset_note(ctx.facts.get("hardware") or detect_hw(self.runner))
+            if note:
+                self.ui.warn(note)
+        if code == EXIT_OK and has_partial(plan):
+            code = EXIT_PARTIAL
+        if not self.runner.dry_run and any(p.action.reboot and p.status == "done" for p in plan.items) \
+                and self.ui.interactive and not self.args.yes and self.ui.confirm("Reboot now?", default=False):
+            self.runner.run(["systemctl", "reboot"], sudo=True)
+        return code
+
+    def run_staged(self, profile: Profile, resume_from: Journal | None = None) -> int:
+        """`linop`: one module at a time — ask, review, apply (D30)."""
+        from fai_linop.core.staged import StagedRun
+        blocked = self.guard_platform()
+        if blocked is not None:
+            return blocked
+        dry = self.runner.dry_run
+        if not dry and not self.ui.interactive and not self.args.yes:
+            self.ui.error("non-interactive run: pass --yes (the answers then come from the profile)")
+            return EXIT_USAGE
+        ctx, done = self._start(profile, resume_from, staged=True)
+        answered = {ev["module"] for ev in resume_from.events() if ev["event"] == "stage"} if resume_from else set()
+        self.ui.info(f"FAI_LinOP {__version__} on {self.os.name} — profile: {self.profile_path}")
+        self.ui.info("One module at a time: answer, review, apply. Enter takes the default; "
+                     "Ctrl-C stops (`linop resume` continues)." + (" DRY RUN: nothing is changed or saved." if dry else ""))
+        run = StagedRun(ctx, save=lambda p: self.save_profile(p, quiet=True), prepare=lambda: self._prepare(ctx),
+                        keep_going=self.args.keep_going, done=done, answered=answered)
+        plan = run.run()
+        if run.aborted:
+            return EXIT_FAILED
+        self.ui.heading("Done")
+        code = self._finish(ctx, plan)
+        self.ui.info(f"Log: {ctx.journal.run_dir / 'linop.log'}")
+        return code
+
+    def run_profile(self, profile: Profile, resume_from: Journal | None = None) -> int:
+        """`linop apply` / `linop plan`: the whole profile, one plan, one confirmation."""
+        blocked = self.guard_platform()
+        if blocked is not None:
+            return blocked
+        ctx, done = self._start(profile, resume_from)
+        journal = ctx.journal
         plan = build_plan(ctx, collect_actions(ctx), done)
         show_plan(ctx, plan)
         planning_failed = [p for p in plan.items if p.status == "failed"]
@@ -176,40 +244,15 @@ class App:
                 self.ui.info("Cancelled — nothing was changed.")
                 journal.write("run_end", summary={"cancelled": True})
                 return EXIT_OK
-            from fai_linop.core import preflight
-            if not preflight.run(self.os, self.runner, self.ui, needs_network=True, dry_run=False,
-                                 speedtest=profile.get("system", "speedtest")):
-                self.ui.error("Preflight checks failed — nothing was changed.")
+            if not self._prepare(ctx):
                 journal.write("run_end", summary={"preflight": "failed"})
                 return EXIT_FAILED
-            provider = snapshot.detect(self.runner)
-            if provider:
-                ok = provider.create(self.runner, f"linop {journal.run_id}")
-                journal.write("snapshot", provider=provider.name, ok=ok)
-                (self.ui.ok if ok else self.ui.warn)(f"{provider.name} snapshot {'created' if ok else 'FAILED'}")
-            else:
-                journal.write("snapshot", provider=None)
-                self.ui.info("No filesystem snapshot tool configured — changed files are backed up individually.")
         execute(ctx, plan, keep_going=self.args.keep_going)
-        code = report(ctx, plan)
-        if self.os.is_linux and not self.runner.dry_run:
-            from fai_linop.hardware.linux import detect as detect_hw
-            from fai_linop.hardware.linux import modeset_note
-            note = modeset_note(ctx.facts.get("hardware") or detect_hw(self.runner))
-            if note:
-                self.ui.warn(note)
-        if code == EXIT_OK and has_partial(plan):
-            code = EXIT_PARTIAL
-        if not self.runner.dry_run and any(p.action.reboot and p.status == "done" for p in plan.items) \
-                and self.ui.interactive and not self.args.yes and self.ui.confirm("Reboot now?", default=False):
-            self.runner.run(["systemctl", "reboot"], sudo=True)
-        return code
+        return self._finish(ctx, plan)
 
     # ---- commands ---------------------------------------------------------------
     def cmd_default(self) -> int:
-        profile = run_wizard(self.load_profile(), self.ui)
-        self.save_profile(profile)
-        return self.run_profile(profile)
+        return self.run_staged(self.load_profile())
 
     def cmd_plan(self) -> int:
         return self.run_profile(self.load_profile())
@@ -231,6 +274,8 @@ class App:
             self.ui.error(f"The last run {previous.run_id} was a {previous.command}; resume continues apply runs only.")
             return EXIT_USAGE
         self.ui.info(f"Resuming run {previous.run_id}")
+        if previous.meta().get("staged") and (self.ui.interactive or self.args.yes):
+            return self.run_staged(self.load_profile(), resume_from=previous)   # asks only what was not asked yet
         return self.run_profile(self.load_profile(), resume_from=previous)
 
     def cmd_rollback(self) -> int:
@@ -397,26 +442,21 @@ class App:
         return EXIT_OK
 
     def cmd_doctor(self) -> int:
-        provider = snapshot.detect(self.runner) if self.os.is_linux else None
-        hw_rows = []
-        modeset_warning = None
-        if self.os.is_linux:
-            from fai_linop.hardware.linux import detect as detect_hw
-            from fai_linop.hardware.linux import modeset_note, modeset_row
-            hw = detect_hw(self.runner)
-            gpus = ", ".join(f"{g.vendor}:{g.device_id:04x}{' (open modules ok)' if g.nvidia_open_capable else ''}"
-                             for g in hw.gpus) or "none"
-            hw_rows = [("GPU", gpus), ("CPU", hw.cpu_vendor), ("RAM", f"{hw.ram_mb} MiB"),
-                       ("Root disk", {True: "HDD", False: "SSD/NVMe", None: "unknown"}[hw.root_rotational]),
-                       ("Kernels", ", ".join(hw.kernels) or "unknown"), ("Virtualization", hw.virtualization)]
-            row = modeset_row(hw)
-            if row:
-                hw_rows.append(row)
-            modeset_warning = modeset_note(hw)
-        sec_rows = []
-        if self.os.is_linux:
-            from fai_linop.security.actions import security_rows
-            sec_rows = security_rows(self.runner, self.os.family)
+        from fai_linop.hardware.linux import detect as detect_hw
+        from fai_linop.hardware.linux import modeset_note, modeset_row
+        provider = snapshot.detect(self.runner)
+        hw = detect_hw(self.runner)
+        gpus = ", ".join(f"{g.vendor}:{g.device_id:04x}{' (open modules ok)' if g.nvidia_open_capable else ''}"
+                         for g in hw.gpus) or "none"
+        hw_rows = [("GPU", gpus), ("CPU", hw.cpu_vendor), ("RAM", f"{hw.ram_mb} MiB"),
+                   ("Root disk", {True: "HDD", False: "SSD/NVMe", None: "unknown"}[hw.root_rotational]),
+                   ("Kernels", ", ".join(hw.kernels) or "unknown"), ("Virtualization", hw.virtualization)]
+        row = modeset_row(hw)
+        if row:
+            hw_rows.append(row)
+        modeset_warning = modeset_note(hw)
+        from fai_linop.security.actions import security_rows
+        sec_rows = security_rows(self.runner, self.os.family)
         self.ui.table("FAI_LinOP doctor", ("Item", "Value"), [
             ("FAI_LinOP", __version__),
             ("OS", f"{self.os.name} (id={self.os.id or '-'}, family={self.os.family.value})"),
@@ -448,8 +488,15 @@ def _is_read_only(args: argparse.Namespace) -> bool:
     return (args.command, getattr(args, "what", None)) in READ_ONLY_COMMANDS
 
 
+def _is_linux() -> bool:
+    return sys.platform.startswith("linux")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if not _is_linux():   # D31: Windows and macOS live in their own projects
+        print("linop: FAI_LinOP is Linux only (Arch, Debian, Ubuntu, Fedora).", file=sys.stderr)
+        return EXIT_UNSUPPORTED
     if _is_root() and os.environ.get("LINOP_ALLOW_ROOT") != "1" and not _is_read_only(args):
         print("linop: do not run FAI_LinOP as root — run it as your normal user; it asks for sudo "
               "only for the commands that need it (D15).", file=sys.stderr)

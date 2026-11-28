@@ -1,12 +1,13 @@
 """Plan → show → confirm → apply → verify, with the journal as the source of
-truth for resume and the final report (D6, D14)."""
+truth for resume and the final report (D6). The same pieces serve the staged
+flow (one module at a time, D30) and the batch flow (`linop apply`)."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 
-from fai_linop.core.action import Action, Change, Context, Reversible, Risk, registered_modules
+from fai_linop.core.action import Action, Change, Context, Module, Reversible, Risk, registered_modules
 from fai_linop.recovery.journal import DONE, FAILED, SKIPPED, STARTED
 
 log = logging.getLogger("fai_linop.engine")
@@ -80,18 +81,32 @@ class Plan:
         return [p for p in self.pending if p.action.reversible is Reversible.ONE_WAY]
 
 
-def collect_actions(ctx: Context) -> list[Action]:
-    actions: list[Action] = []
-    for module in registered_modules():
-        if module.name in _schema_modules() and not ctx.profile.enabled(module.name):
-            continue
-        for action in module.build(ctx):
-            action.module = action.module or module.name
-            actions.append(action)
+def module_actions(ctx: Context, module: Module) -> list[Action]:
+    actions = module.build(ctx)
+    for action in actions:
+        action.module = action.module or module.name
+    return actions
+
+
+def check_unique(actions: list[Action]) -> None:
     ids = [a.id for a in actions]
     dupes = {i for i in ids if ids.count(i) > 1}
     if dupes:
         raise ValueError(f"duplicate action ids: {sorted(dupes)}")
+
+
+def optional(module: Module) -> bool:
+    """The profile switches this module on or off (every module FAI_LinOP ships is)."""
+    return module.name in _schema_modules()
+
+
+def collect_actions(ctx: Context) -> list[Action]:
+    actions: list[Action] = []
+    for module in registered_modules():
+        if optional(module) and not ctx.profile.enabled(module.name):
+            continue
+        actions += module_actions(ctx, module)
+    check_unique(actions)
     return actions
 
 
@@ -123,34 +138,90 @@ def build_plan(ctx: Context, actions: list[Action], done: set[str] = frozenset()
     return plan
 
 
-def show_plan(ctx: Context, plan: Plan) -> None:
-    ui = ctx.ui
-    rows, kinds = [], {}
+MAX_LISTED = 6   # short summary: changes named per action before "+N more" (file diffs are never cut)
+
+
+def _notes(a: Action) -> str:
+    notes = []
+    if a.reversible is Reversible.ONE_WAY:
+        notes.append("one-way")
+    if a.risk is Risk.HIGH:
+        notes.append("high risk")
+    if a.reboot:
+        notes.append("reboot")
+    return f" [yellow]({', '.join(notes)})[/yellow]" if notes else ""
+
+
+def _short_lines(p: PlannedAction) -> list[str]:
+    """One action in the short summary (D30): packages are counted, everything else is
+    named. A file's diff is always shown — nothing is overwritten unseen (D10)."""
+    head = f"  • {p.action.title}{_notes(p.action)}"
+    if p.deferred and p.status == "pending":
+        return [f"{head}: {DEFERRED_NOTE}"]
+    packages = [c for c in p.changes if c.kind in ("package", "flatpak")]
+    others = [c for c in p.changes if c.kind not in ("package", "flatpak")]
+    lines = [head]
+    if packages:
+        by_source: dict[str, int] = {}
+        for c in packages:
+            source = c.detail or ("Flathub" if c.kind == "flatpak" else "repo")
+            by_source[source] = by_source.get(source, 0) + 1
+        lines[0] += f": {len(packages)} package(s) — " + ", ".join(f"{n} {k}" for k, n in by_source.items())
+    files = [c for c in others if c.kind == "file"]
+    rest = [c for c in others if c.kind != "file"]
+    for c in files + rest[:MAX_LISTED]:
+        detail = c.detail.strip("\n")
+        if "\n" in detail:
+            lines.append(f"      {c.kind}: {c.target}")
+            lines += [f"        {d}" for d in detail.splitlines()]
+        else:
+            lines.append(f"      {c.kind}: {c.target}" + (f" ({detail})" if detail else ""))
+    if len(rest) > MAX_LISTED:
+        lines.append(f"      … +{len(rest) - MAX_LISTED} more (-v lists all)")
+    return lines
+
+
+def _table_rows(plan: Plan) -> list[tuple[str, ...]]:
+    rows = []
     for p in plan.items:
         if p.deferred and p.status == "pending":
             rows.append((p.action.module, p.action.title, DEFERRED_NOTE, p.action.risk.value, p.action.reversible.value))
             continue
         if not p.changes:
             continue
-        for c in p.changes:
-            kinds[c.kind] = kinds.get(c.kind, 0) + 1
         groups: dict[str, list[str]] = {}
         for c in p.changes:
             groups.setdefault(f"{c.kind}: {c.detail}" if c.detail and c.kind in ("package", "flatpak") else c.kind, []).append(
                 c.target if c.kind in ("package", "flatpak") else f"{c.target} ({c.detail})" if c.detail else c.target)
         what = "\n".join(f"[bold]{k}[/bold] ({len(v)}): {', '.join(v)}" for k, v in groups.items())
         rows.append((p.action.module, p.action.title, what, p.action.risk.value, p.action.reversible.value))
+    return rows
+
+
+def show_plan(ctx: Context, plan: Plan, nothing: str = "Nothing to do — the system already matches the profile.") -> None:
+    """What would change. Short by default (D30); `-v` prints the full table with every name."""
+    ui = ctx.ui
+    shown = [p for p in plan.items if p.changes or (p.deferred and p.status == "pending")]
     failed = [p for p in plan.items if p.status == "failed"]
-    if not rows:
+    if not shown:
         if failed:
             for p in failed:
                 ui.error(f"{p.action.title} ({p.action.id}): {p.message}")
             ui.error(f"{len(failed)} action(s) could not be planned — fix the error(s) above.")
         else:
-            ui.ok("Nothing to do — the system already matches the profile.")
+            ui.ok(nothing)
         return
-    ui.table("FAI_LinOP plan", ("Module", "Action", "Changes", "Risk", "Reversible"), rows)
-    ui.info("Totals: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())))
+    if ui.verbose:
+        kinds: dict[str, int] = {}
+        for p in shown:
+            for c in p.changes:
+                kinds[c.kind] = kinds.get(c.kind, 0) + 1
+        ui.table("FAI_LinOP plan", ("Module", "Action", "Changes", "Risk", "Reversible"), _table_rows(plan))
+        ui.info("Totals: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())))
+    else:
+        for p in shown:
+            for line in _short_lines(p):
+                ui.info(line)
     size_line = size_summary(ctx, plan)
     if size_line:
         ui.info(size_line)
@@ -166,9 +237,12 @@ def show_plan(ctx: Context, plan: Plan) -> None:
         ui.info(f"{len(skipped)} action(s) already satisfied")
 
 
-def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
+def apply_plan(ctx: Context, plan: Plan, keep_going: bool = False, failed: set[str] | None = None) -> Plan:
+    """Apply one plan and journal every action. `failed` carries the ids of failed
+    actions between the stages of a staged run, so `requires` works across modules."""
     journal = ctx.journal
-    failed: set[str] = {p.action.id for p in plan.items if p.status == "failed"}
+    failed = failed if failed is not None else set()
+    failed |= {p.action.id for p in plan.items if p.status == "failed"}
     for p in plan.items:
         a = p.action
         if p.status in ("done", "skipped"):
@@ -180,10 +254,14 @@ def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
             if not keep_going:
                 break
             continue
+        if p.status == "not-run":   # declined by the user in a staged run
+            journal.write("action", id=a.id, status=SKIPPED, reason=p.message)
+            continue
         blocked = [r for r in a.requires if r in failed]
         if blocked:
             p.status, p.message = "not-run", f"requires failed action(s): {', '.join(blocked)}"
             journal.write("action", id=a.id, status=SKIPPED, reason=p.message)
+            ctx.ui.warn(f"{a.title}: not run — {p.message}")
             continue
         journal.write("action", id=a.id, status=STARTED, title=a.title, dry_run=ctx.dry_run,
                       changes=[c.__dict__ for c in p.changes])
@@ -212,16 +290,33 @@ def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
     for p in plan.items:
         if p.status == "pending":
             p.status = "not-run"
-    journal.write("run_end", summary={s: sum(1 for p in plan.items if p.status == s)
-                                      for s in ("done", "partial", "skipped", "failed", "not-run")})
+    return plan
+
+
+STATUSES = ("done", "partial", "skipped", "failed", "not-run")
+
+
+def end_run(ctx: Context, plan: Plan) -> None:
+    ctx.journal.write("run_end", summary={s: sum(1 for p in plan.items if p.status == s) for s in STATUSES})
+
+
+def execute(ctx: Context, plan: Plan, keep_going: bool = False) -> Plan:
+    apply_plan(ctx, plan, keep_going)
+    end_run(ctx, plan)
     return plan
 
 
 def report(ctx: Context, plan: Plan) -> int:
     """Final summary built from real statuses (v2.5 printed success unconditionally, F31)."""
-    rows = [(p.action.module, p.action.title, p.status, p.message) for p in plan.items]
-    if rows:
+    problems = ("failed", "partial", "not-run")
+    rows = [(p.action.module, p.action.title, p.status, p.message) for p in plan.items
+            if ctx.ui.verbose or p.status in problems]
+    if rows:   # short output lists only what needs attention; -v lists every action
         ctx.ui.table(f"Run {ctx.journal.run_id}", ("Module", "Action", "Status", "Note"), rows)
+    counts = {s: sum(1 for p in plan.items if p.status == s) for s in STATUSES}
+    labels = {"done": "done", "skipped": "already ok", "partial": "partial", "failed": "failed", "not-run": "not run"}
+    if plan.items:
+        ctx.ui.info("Summary: " + ", ".join(f"{n} {labels[s]}" for s, n in counts.items() if n))
     failed = [p for p in plan.items if p.status == "failed"]
     lost = ctx.facts.get("install_failures", [])
     if lost:

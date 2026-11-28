@@ -4,7 +4,7 @@
 #
 #   git clone https://github.com/MrFedai/FAI_LinOP.git ~/FAI_LinOP && ~/FAI_LinOP/setup.sh
 #
-#   ./setup.sh              wizard -> plan -> one confirmation -> apply
+#   ./setup.sh              staged setup: one module at a time (ask -> review -> apply)
 #   ./setup.sh plan         dry run
 #   ./setup.sh --help       all commands
 #

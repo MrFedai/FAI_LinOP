@@ -17,7 +17,6 @@ from fai_linop.core.profile import Profile, ProfileError, validate
 from fai_linop.core.runner import CommandError, DryRunRunner, FakeRunner, Result, SystemRunner
 from fai_linop.core.ui import UI
 from fai_linop.core.wizard import QUESTIONS, run_wizard
-from fai_linop.package.base import Homebrew, NotSupported, Winget
 from fai_linop.platform.detect import Family, OSInfo, Tier, classify, detect, parse_os_release
 from fai_linop.recovery.backup import FileChanger, restore_files
 from fai_linop.recovery.journal import DONE, FAILED, Journal
@@ -73,22 +72,22 @@ def test_sudo_prefix_and_fake_prefix_matching():
     ("gentoo", Family.UNKNOWN, Tier.UNSUPPORTED),
 ])
 def test_os_fixtures(name, family, tier):
-    info = detect(FIX / f"{name}.os-release", system="Linux")
+    info = detect(FIX / f"{name}.os-release")
     assert (info.family, info.tier) == (family, tier)
 
 
 def test_os_release_is_never_executed(tmp_path):
-    info = detect(FIX / "malicious.os-release", system="Linux")
+    info = detect(FIX / "malicious.os-release")
     assert info.tier is Tier.UNSUPPORTED
     assert not Path("/tmp/linop-pwned").exists() and not Path("/tmp/linop-pwned2").exists()
 
 
-def test_windows_and_macos_are_stubs():
-    assert detect(system="Windows").tier is Tier.STUB
-    assert detect(system="Darwin").family is Family.MACOS
-    for pm in (Winget(FakeRunner()), Homebrew(FakeRunner())):
-        with pytest.raises(NotSupported):
-            pm.install(["x"])
+def test_linux_only_no_windows_or_macos(monkeypatch, capsys):          # D31
+    import fai_linop.cli as cli
+    assert not hasattr(Family, "WINDOWS") and not hasattr(Family, "MACOS") and not hasattr(Tier, "STUB")
+    monkeypatch.setattr(cli, "_is_linux", lambda: False)
+    assert cli.main(["doctor"]) == cli.EXIT_UNSUPPORTED
+    assert "Linux only" in capsys.readouterr().err
 
 
 def test_parse_os_release_quotes():
@@ -300,11 +299,10 @@ def _app(tmp_path, command, os_info=ARCH, answers=(), yes=False, dry=False):
     return app, out
 
 
-def test_cli_refuses_stub_and_unsupported(tmp_path):
-    app, out = _app(tmp_path, "apply", OSInfo(Family.WINDOWS, Tier.STUB, "windows", "Windows"))
-    assert app.cmd_apply() == 3 and "interfaces only" in out.getvalue()
-    app, _ = _app(tmp_path, "apply", OSInfo(Family.UNKNOWN, Tier.UNSUPPORTED, "gentoo", "Gentoo"))
-    assert app.cmd_apply() == 3
+def test_cli_refuses_unsupported(tmp_path):
+    for command in ("apply", "default"):
+        app, out = _app(tmp_path, command, OSInfo(Family.UNKNOWN, Tier.UNSUPPORTED, "gentoo", "Gentoo"))
+        assert getattr(app, f"cmd_{command}")() == 3 and "not supported" in out.getvalue()
 
 
 def test_cli_full_flow_confirm_apply_rollback(tmp_path):
@@ -323,7 +321,7 @@ def test_cli_full_flow_confirm_apply_rollback(tmp_path):
         register("dotfiles", "Dotfiles")(lambda ctx: [Edit("edit", target)])
         app, out = _app(tmp_path, "apply", answers=["y"])
         assert app.cmd_apply() == 0 and target.read_text() == "linop\n"
-        assert "FAI_LinOP plan" in out.getvalue()
+        assert f"file: {target}" in out.getvalue() and "FAI_LinOP plan" not in out.getvalue()   # short summary (D30)
         app, _ = _app(tmp_path, "runs")
         assert app.cmd_runs() == 0
         app, _ = _app(tmp_path, "rollback", answers=["y"])

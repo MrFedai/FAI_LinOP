@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import platform as _platform
 import shlex
 from dataclasses import dataclass, field
 from enum import Enum
@@ -16,15 +15,12 @@ class Family(str, Enum):
     ARCH = "arch"
     DEBIAN = "debian"   # Debian and Ubuntu share one provider (D4)
     FEDORA = "fedora"
-    WINDOWS = "windows"
-    MACOS = "macos"
     UNKNOWN = "unknown"
 
 
 class Tier(str, Enum):
     SUPPORTED = "supported"        # D4: Arch, Debian, Ubuntu, Fedora
     EXPERIMENTAL = "experimental"  # known derivative of a supported distro
-    STUB = "stub"                  # Windows / macOS: interfaces only (D3)
     UNSUPPORTED = "unsupported"
 
 
@@ -40,10 +36,6 @@ class OSInfo:
     name: str
     version_id: str = ""
     id_like: tuple[str, ...] = field(default_factory=tuple)
-
-    @property
-    def is_linux(self) -> bool:
-        return self.family not in (Family.WINDOWS, Family.MACOS)
 
 
 def parse_os_release(text: str) -> dict[str, str]:
@@ -77,12 +69,8 @@ def classify(values: dict[str, str]) -> OSInfo:
     return OSInfo(Family.UNKNOWN, Tier.UNSUPPORTED, os_id, name, version, like)
 
 
-def detect(os_release: Path = Path("/etc/os-release"), system: str | None = None) -> OSInfo:
-    system = system or _platform.system()
-    if system == "Windows":
-        return OSInfo(Family.WINDOWS, Tier.STUB, "windows", "Windows")
-    if system == "Darwin":
-        return OSInfo(Family.MACOS, Tier.STUB, "macos", "macOS")
+def detect(os_release: Path = Path("/etc/os-release")) -> OSInfo:
+    """FAI_LinOP is Linux only (D31); `linop` refuses to start anywhere else."""
     for path in (os_release, Path("/usr/lib/os-release")):
         try:
             return classify(parse_os_release(path.read_text(errors="replace")))

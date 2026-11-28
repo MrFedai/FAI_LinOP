@@ -1,5 +1,4 @@
-"""Package manager interface. Linux providers arrive in Phase 4; Windows and
-macOS are stubs that report "not implemented" (D3)."""
+"""Package manager interface; the providers (pacman, apt, dnf) are in `providers.py`."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ from fai_linop.core.runner import Runner
 
 
 class NotSupported(RuntimeError):
-    """The platform/provider exists as an interface only (D3)."""
+    """This distro has no provider for the requested operation."""
 
 
 Size = tuple[int | None, int | None]   # (download bytes, installed bytes); None = unknown
@@ -75,20 +74,3 @@ class PackageManager(ABC):
         """Download / installed size per name from ONE query (read-only). Unknown = (None, None);
         a failing query never raises — the preview just shows "unknown"."""
         return {n: (None, None) for n in names}
-
-
-class StubPackageManager(PackageManager):
-    platform = ""
-
-    def _no(self, *_a, **_k):
-        raise NotSupported(f"{self.name} on {self.platform} is not implemented in FAI_LinOP v3.0 (skeleton only)")
-
-    installed = available = install = remove = _no  # type: ignore[assignment]
-
-
-class Winget(StubPackageManager):
-    name, platform = "winget", "Windows"
-
-
-class Homebrew(StubPackageManager):
-    name, platform = "brew", "macOS"

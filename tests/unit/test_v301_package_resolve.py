@@ -183,6 +183,10 @@ def test_summary_source_column_repo_aur_flatpak_deferred(tmp_path, monkeypatch):
     fs = FakeSystem(repo=["git"], yay=True, flatpak=True)
     ctx = ctx_for(tmp_path, "[modules]\ngaming = true\n", runner=fs.runner)
     plan = engine.build_plan(ctx, package_actions())
+    engine.show_plan(ctx, plan)                      # short summary (D30): counts per source, no names
+    out = ctx.ui.console.file.getvalue()
+    assert "2 package(s) — 1 repo, 1 " + DEFERRED in out and "git" not in out
+    ctx.ui.verbose = True                            # -v: the full table with every name
     engine.show_plan(ctx, plan)
     out = ctx.ui.console.file.getvalue()
     assert "package: repo (1): git" in out

@@ -1,5 +1,6 @@
-"""Up-front wizard (D14): every question is asked BEFORE anything changes.
-Answers are written to the profile; the next run can reuse them."""
+"""The questions. `linop` asks them one module at a time, right before that module
+is applied (D30); `linop wizard` asks all of them and only saves the profile.
+Answers are written to the profile and are the defaults of the next run."""
 
 from __future__ import annotations
 
@@ -20,6 +21,15 @@ class Question:
     choices: tuple[str, ...] = ()               # empty = yes/no (or free text when free=True)
     free: bool = False                          # free-text answer (empty input keeps the current value)
     when: Callable[[Profile], bool] = lambda p: True
+
+    @property
+    def module(self) -> str:
+        """The module (stage) this question belongs to."""
+        return self.key if self.section == "modules" else SECTION_MODULE.get(self.section, self.section)
+
+
+# profile sections that are asked with another module
+SECTION_MODULE = {"wallpaper": "gnome"}
 
 
 NONE_LABEL = "(none)"   # how the empty profile value "" is shown in a choice list
@@ -94,24 +104,45 @@ PROFILE_ONLY = {
 }
 
 
+class Wizard:
+    """Asks questions and writes the answers into the profile."""
+
+    def __init__(self, profile: Profile, ui: UI):
+        self.profile = profile
+        self.ui = ui
+
+    def ask_module(self, module: str) -> bool:
+        """One module: its yes/no question, then (when yes) its own questions."""
+        self._ask(q for q in QUESTIONS if q.module == module)
+        return self.profile.enabled(module)
+
+    def ask_all(self) -> Profile:
+        self._ask(QUESTIONS)
+        return self.profile
+
+    def _ask(self, questions) -> None:
+        profile, ui = self.profile, self.ui
+        for q in questions:
+            if not q.when(profile):
+                continue
+            current = profile.get(q.section, q.key)
+            if q.choices:
+                profile.set(q.section, q.key, _choose(ui, q, current))
+            elif q.free:
+                profile.set(q.section, q.key, ui.ask_text(q.text, str(current or "")))
+            else:
+                profile.set(q.section, q.key, ui.confirm(q.text, bool(current), wizard=True))
+            if (q.section, q.key) == ("modules", "packages") and profile.enabled("packages"):
+                _ask_groups(profile, ui)
+
+
 def run_wizard(profile: Profile, ui: UI) -> Profile:
+    """`linop wizard`: every question in one go, nothing applied."""
     ui.heading("FAI_LinOP setup wizard")
     if profile.path and profile.path.exists():
         if ui.confirm(f"Reuse previous answers from {profile.path}?", default=True):
             return profile
-    for q in QUESTIONS:
-        if not q.when(profile):
-            continue
-        current = profile.get(q.section, q.key)
-        if q.choices:
-            profile.set(q.section, q.key, _choose(ui, q, current))
-        elif q.free:
-            profile.set(q.section, q.key, ui.ask_text(q.text, str(current or "")))
-        else:
-            profile.set(q.section, q.key, ui.confirm(q.text, bool(current), wizard=True))
-        if (q.section, q.key) == ("modules", "packages") and profile.enabled("packages"):
-            _ask_groups(profile, ui)
-    return profile
+    return Wizard(profile, ui).ask_all()
 
 
 def _choose(ui: UI, q: Question, current: str) -> str:
