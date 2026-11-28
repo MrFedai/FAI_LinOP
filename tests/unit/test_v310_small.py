@@ -15,8 +15,9 @@ from fai_linop.core.runner import FakeRunner
 from fai_linop.core.ui import UI
 from fai_linop.package import catalog
 from fai_linop.package.resolve import Resolution
-from fai_linop.system.actions import service_actions
-from fai_linop.terminal.actions import AlacrittyTheme, KittyConf, KittyTheme
+from fai_linop.package.actions import build as packages_build
+from fai_linop.package.actions import service_actions
+from fai_linop.terminal.actions import ALACRITTY_THEME_URL, AlacrittyTheme, KittyConf, KittyTheme
 
 
 def ids(actions):
@@ -28,14 +29,28 @@ def ids(actions):
 def test_libvirtd_enabled_when_power_group_selected(tmp_path):
     ctx = ctx_for(tmp_path, '[packages]\ngroups = ["power"]\n')
     acts = service_actions(ctx)
-    assert "system.libvirtd" in ids(acts)
-    svc = next(a for a in acts if a.id == "system.libvirtd")
+    assert "packages.libvirtd" in ids(acts)
+    svc = next(a for a in acts if a.id == "packages.libvirtd")
     assert svc.unit == "libvirtd.service" and svc.plan(ctx)
 
 
 def test_libvirtd_enabled_when_extra_selects_qemu(tmp_path):
     ctx = ctx_for(tmp_path, '[packages]\ngroups = []\nextra = ["virt-manager"]\n')
-    assert "system.libvirtd" in ids(service_actions(ctx))
+    assert "packages.libvirtd" in ids(service_actions(ctx))
+
+
+def test_service_actions_run_after_installs(tmp_path):
+    ctx = ctx_for(tmp_path, '[packages]\ngroups = ["power", "remote"]\n')
+    order = ids(packages_build(ctx))
+    for svc, inst in (("packages.libvirtd", "packages.native"), ("packages.anydesk", "packages.aur")):
+        assert order.index(svc) > order.index(inst)
+    assert order.index("packages.libvirtd") > order.index("packages.flatpak")
+
+
+def test_alacritty_theme_url_pinned():
+    import re
+    assert "master" not in ALACRITTY_THEME_URL
+    assert re.search(r"/[0-9a-f]{40}/", ALACRITTY_THEME_URL)
 
 
 def test_no_service_actions_when_not_selected(tmp_path):
@@ -46,20 +61,20 @@ def test_no_service_actions_when_not_selected(tmp_path):
 def test_anydesk_service_when_native(tmp_path):
     ctx = ctx_for(tmp_path, '[packages]\ngroups = ["remote"]\n')
     ctx.facts["packages"] = Resolution(aur=["anydesk-bin"])
-    svc = next(a for a in service_actions(ctx) if a.id == "system.anydesk")
+    svc = next(a for a in service_actions(ctx) if a.id == "packages.anydesk")
     assert svc.unit == "anydesk.service" and svc.plan(ctx)
 
 
 def test_anydesk_no_service_when_flatpak(tmp_path):
     ctx = ctx_for(tmp_path, '[packages]\ngroups = ["remote"]\n')
     ctx.facts["packages"] = Resolution(flatpak=["com.anydesk.Anydesk"])
-    svc = next(a for a in service_actions(ctx) if a.id == "system.anydesk")
+    svc = next(a for a in service_actions(ctx) if a.id == "packages.anydesk")
     assert svc.plan(ctx) == []
 
 
 def test_anydesk_absent_when_not_selected(tmp_path):
     ctx = ctx_for(tmp_path, '[packages]\ngroups = ["power"]\n')
-    assert "system.anydesk" not in ids(service_actions(ctx))
+    assert "packages.anydesk" not in ids(service_actions(ctx))
 
 
 # ---- 3.9 terminal themes -------------------------------------------------------------

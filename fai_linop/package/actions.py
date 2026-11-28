@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
+from fai_linop.core.common import EnableService
 from fai_linop.core.runner import CommandError
 from fai_linop.package.base import PackageManager
 from fai_linop.package.providers import Apt, AurHelper, Flatpak, Pacman, native_for
@@ -265,6 +266,38 @@ def request(ctx: Context, ids: list[str] = (), names: list[str] = ()) -> None:
     ctx.facts.setdefault("package_names", []).extend(n for n in names if n not in ctx.facts["package_names"])
 
 
+LIBVIRT_PACKAGES = {"qemu", "virt-manager"}
+
+
+def selected_ids(ctx: Context) -> set[str]:
+    """Catalog ids this profile asks for (groups + extra + custom file)."""
+    ids = {e.id for e in wanted_entries(ctx.profile.get("packages", "groups"))}
+    return ids | set(profile_extra_names(ctx))
+
+
+def anydesk_native(ctx: Context) -> bool:
+    """AnyDesk from the distro / AUR ships `anydesk.service`; the Flatpak has no unit."""
+    res = resolution(ctx)
+    return any(n in group for group in (res.installed, res.native, res.aur, res.deferred)
+               for n in ("anydesk", "anydesk-bin"))
+
+
+def service_actions(ctx: Context) -> list[Action]:
+    """F34: enable libvirtd / AnyDesk only when the profile selects the package; nothing otherwise.
+    Runs after the install actions (same module, later in the list)."""
+    selected = selected_ids(ctx)
+    actions: list[Action] = []
+    if selected & LIBVIRT_PACKAGES:
+        svc = EnableService("packages.libvirtd", "libvirtd.service", "libvirtd (virtual machines)")
+        svc.requires = ("packages.native",)
+        actions.append(svc)
+    if "anydesk" in selected:
+        svc = EnableService("packages.anydesk", "anydesk.service", "AnyDesk service", when=anydesk_native)
+        svc.requires = ("packages.aur",)  # Arch: anydesk-bin comes from the AUR
+        actions.append(svc)
+    return actions
+
+
 @register("packages", "Packages", order=20)
 def build(ctx: Context) -> list[Action]:
-    return [InstallNative(), InstallAurHelper(), InstallAur(), SetupFlathub(), InstallFlatpak()]
+    return [InstallNative(), InstallAurHelper(), InstallAur(), SetupFlathub(), InstallFlatpak(), *service_actions(ctx)]

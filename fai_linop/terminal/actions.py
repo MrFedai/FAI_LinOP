@@ -28,10 +28,14 @@ PINS = {
     "zsh-syntax-highlighting": ("https://github.com/zsh-users/zsh-syntax-highlighting.git", "0bfcb582e71d3abe604ce67bc0fe5a21f377507e"),
     "powerlevel10k": ("https://github.com/romkatv/powerlevel10k.git", "d05a1b00f9a61f9578bf9dc19b8451942dde8734"),
 }
-ALACRITTY_THEME_URL = "https://raw.githubusercontent.com/alacritty/alacritty-theme/master/themes/{}.toml"
+# pinned 2026-11-28 (git ls-remote HEAD); update deliberately
+ALACRITTY_THEME_URL = ("https://raw.githubusercontent.com/alacritty/alacritty-theme/"
+                       "52d05307d64d988e16678f98f876b54592c2777f/themes/{}.toml")
+# names verified upstream 2026-11-28
 KITTY_THEMES = {"dracula": "Dracula", "nord": "Nord", "gruvbox_dark": "Gruvbox Dark", "tokyo_night": "Tokyo Night",
                 "cyberpunk": "Cyberpunk"}
 # theme keys with an alacritty-theme file; v2.5 "Omni" is Alacritty-only, "Cyberpunk" Kitty-only (no guessing)
+# names verified upstream 2026-11-28
 ALACRITTY_THEMES = ("dracula", "nord", "gruvbox_dark", "tokyo_night", "omni")
 KITTY_CONF_DEFAULT = "font_family JetBrainsMono Nerd Font\n"
 
