@@ -58,7 +58,7 @@ Expected on Arch in a root container: the AUR actions fail (makepkg refuses root
 
 | Level | What actually ran |
 |---|---|
-| UNIT | 328 tests pass, 3 skipped (local `ci` job, commit `dd07c7b`, v3.1.0; container CI for v3.1.0 NOT RUN yet; v3.0.2: 240 on `bd06ba6`, GitHub CI run 46048542414 green on all 4 distro containers; v3.0.0: 197 on `71738dc`; skipped: 2 Arch characterization scenarios need root + unshare, 1 opt-in real-run test). Display rollback (Mutter restore) runs against a fake Mutter only |
+| UNIT | 328 tests pass, 3 skipped (local `ci` job, commit `dd07c7b`, v3.1.0; GitHub CI run 46101718666 on `2cf6a79` green on all 4 distro containers; v3.0.2: 240 on `bd06ba6`, GitHub CI run 46048542414 green on all 4 distro containers; v3.0.0: 197 on `71738dc`; skipped: 2 Arch characterization scenarios need root + unshare, 1 opt-in real-run test). Display rollback (Mutter restore) runs against a fake Mutter only |
 | INTEGRATION (container) | characterization of v2.5 (Ubuntu + Arch via mount namespace, mocked tools); real apply/rollback on Ubuntu 24.04; real dconf load; catalog check on Ubuntu 24.04 |
 | VM | none |
 | NATIVE | none — first native run: the owner's Arch machine (see docs/FINAL_AUDIT.md, "native checklist") |

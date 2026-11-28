@@ -25,7 +25,7 @@ Closes the v2.5 feature gaps listed in `docs/FEATURE_MATRIX.md` (items 3.1-3.11)
 - Service actions moved from the system module to the packages module so they run after the install, not before the package exists.
 
 ### Test status
-UNIT: 328 passed, 3 skipped (local `ci` job on `dd07c7b`). INTEGRATION (container): NOT RUN for v3.1.0 yet (GitHub CI after push/tag). NATIVE: NOT TESTED.
+UNIT: 328 passed, 3 skipped (local `ci` job on `dd07c7b`). INTEGRATION (container): GitHub CI run 46101718666 on `2cf6a79` — lint, unit, archlinux, debian:stable, ubuntu:24.04, fedora all green. Containers do not validate GPU, monitors or desktop behaviour. NATIVE: NOT TESTED.
 
 ## v3.0.2: Fedora login shell fix (2026-11-27)
 
