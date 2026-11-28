@@ -901,6 +901,13 @@ debian = "xdg-desktop-portal-hyprland"
 fedora = "xdg-desktop-portal-hyprland"
 description = "Hyprland portal"
 
+[pkg.nautilus]
+groups = ["hyprland"]
+arch = "nautilus"
+debian = "nautilus"
+fedora = "nautilus"
+description = "File manager (Hyprland config launches it; v2.5 used dolphin)"
+
 [pkg.adw-gtk-theme]
 groups = ["gnome"]
 arch = "adw-gtk-theme"

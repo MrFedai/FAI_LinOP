@@ -29,7 +29,15 @@ PINS = {
     "powerlevel10k": ("https://github.com/romkatv/powerlevel10k.git", "d05a1b00f9a61f9578bf9dc19b8451942dde8734"),
 }
 ALACRITTY_THEME_URL = "https://raw.githubusercontent.com/alacritty/alacritty-theme/master/themes/{}.toml"
-KITTY_THEMES = {"dracula": "Dracula", "nord": "Nord", "gruvbox_dark": "Gruvbox Dark", "tokyo_night": "Tokyo Night"}
+KITTY_THEMES = {"dracula": "Dracula", "nord": "Nord", "gruvbox_dark": "Gruvbox Dark", "tokyo_night": "Tokyo Night",
+                "cyberpunk": "Cyberpunk"}
+# theme keys with an alacritty-theme file; v2.5 "Omni" is Alacritty-only, "Cyberpunk" Kitty-only (no guessing)
+ALACRITTY_THEMES = ("dracula", "nord", "gruvbox_dark", "tokyo_night", "omni")
+KITTY_CONF_DEFAULT = "font_family JetBrainsMono Nerd Font\n"
+
+
+def theme_unavailable(theme: str, terminal: str) -> Change:
+    return Change("warning", terminal, f"theme {theme} not available for {terminal}")
 
 
 def _clear_incomplete(dest: Path) -> None:
@@ -80,12 +88,16 @@ class KittyTheme(Action):
         theme = ctx.profile.get("terminal", "theme")
         if ctx.profile.get("terminal", "emulator") != "kitty" or not theme:
             return []
+        if theme not in KITTY_THEMES:
+            return [theme_unavailable(theme, "kitty")]
         current = read_text(ctx.home / ".config" / "kitty" / "current-theme.conf") or ""
         if KITTY_THEMES[theme] in current:
             return []
         return [Change("file", "~/.config/kitty/current-theme.conf", KITTY_THEMES[theme])]
 
     def apply(self, ctx):
+        if ctx.profile.get("terminal", "theme") not in KITTY_THEMES:
+            return
         base = ctx.home / ".config" / "kitty"
         for f in ("kitty.conf", "current-theme.conf"):   # the kitten edits these: back them up first
             ctx.files.backup_only(base / f)
@@ -103,6 +115,8 @@ class AlacrittyTheme(Action):
         theme = ctx.profile.get("terminal", "theme")
         if ctx.profile.get("terminal", "emulator") != "alacritty" or not theme:
             return []
+        if theme not in ALACRITTY_THEMES:
+            return [theme_unavailable(theme, "alacritty")]
         conf, theme_file = self._paths(ctx)
         changes = []
         if not theme_file.exists():
@@ -112,11 +126,32 @@ class AlacrittyTheme(Action):
         return changes
 
     def apply(self, ctx):
+        if ctx.profile.get("terminal", "theme") not in ALACRITTY_THEMES:
+            return
         conf, theme_file = self._paths(ctx)
         url = ALACRITTY_THEME_URL.format(ctx.profile.get("terminal", "theme"))
         body = ctx.runner.run(["curl", "-fsSL", "--max-time", "30", url], mutating=False).stdout  # -f: no 404 page as config
         ctx.files.write(theme_file, body.encode())
         ctx.files.write(conf, _alacritty_import(read_text(conf) or "", str(theme_file)).encode())
+
+
+class KittyConf(WriteFile):
+    """Create ~/.config/kitty/kitty.conf with the Nerd Font default only when it does not exist (D10)."""
+
+    def __init__(self):
+        super().__init__("terminal.kitty-conf", "Kitty: default font JetBrainsMono Nerd Font (new kitty.conf only)",
+                         Path("~/.config/kitty/kitty.conf"), lambda ctx: KITTY_CONF_DEFAULT)
+
+    def plan(self, ctx):
+        self.path = ctx.home / ".config" / "kitty" / "kitty.conf"
+        if ctx.profile.get("terminal", "emulator") != "kitty" or self.path.exists():
+            return []
+        return super().plan(ctx)
+
+    def apply(self, ctx):
+        self.path = ctx.home / ".config" / "kitty" / "kitty.conf"
+        if not self.path.exists():
+            super().apply(ctx)
 
 
 def _alacritty_import(text: str, theme_path: str) -> str:
@@ -351,7 +386,7 @@ def build_terminal(ctx: Context):
     emulator = ctx.profile.get("terminal", "emulator")
     if emulator != "none":
         request(ctx, ids=[emulator])
-    return [KittyTheme(), AlacrittyTheme()]
+    return [KittyConf(), KittyTheme(), AlacrittyTheme()]
 
 
 @register("shell", "Shell", order=75)

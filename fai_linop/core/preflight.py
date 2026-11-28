@@ -71,8 +71,22 @@ def run(os_info: OSInfo, runner: Runner, ui: UI, needs_network: bool, dry_run: b
             ui.error("sudo is required for system changes")
             ok = False
     if speedtest:
-        ui.info(f"download speed: {measure_speed(runner)}")
+        speed = measure_speed(runner)
+        ui.info(f"download speed: {speed}")
+        if is_slow(speed):
+            ui.warn(f"slow connection (< {SLOW_KIB_S} KiB/s): downloads will take long")
     return ok
+
+
+SLOW_KIB_S = 500
+
+
+def is_slow(speed: str) -> bool:
+    """True when a `measure_speed` result ("123 KiB/s") is below the threshold; unknown → False."""
+    try:
+        return float(speed.split()[0]) < SLOW_KIB_S
+    except (ValueError, IndexError):
+        return False
 
 
 def measure_speed(runner: Runner) -> str:

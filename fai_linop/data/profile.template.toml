@@ -51,7 +51,7 @@ prefer = "resolution"     # resolution | refresh — when both maxima cannot coe
 
 [terminal]
 emulator = "terminator"   # terminator | kitty | alacritty | gnome-terminal | none
-theme = ""                # kitty/alacritty: dracula | nord | gruvbox_dark | tokyo_night
+theme = ""                # kitty/alacritty: dracula | nord | gruvbox_dark | tokyo_night | cyberpunk (kitty) | omni (alacritty)
 
 [shell]
 name = "none"             # zsh | fish | bash | none

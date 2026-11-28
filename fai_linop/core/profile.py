@@ -87,7 +87,7 @@ SCHEMA: dict[str, dict[str, tuple[Any, Callable[[Any], bool]]]] = {
     },
     "terminal": {
         "emulator": ("terminator", _one_of("terminator", "kitty", "alacritty", "gnome-terminal", "none")),
-        "theme": ("", _one_of("", "dracula", "nord", "gruvbox_dark", "tokyo_night")),
+        "theme": ("", _one_of("", "dracula", "nord", "gruvbox_dark", "tokyo_night", "cyberpunk", "omni")),
     },
     "shell": {
         "name": ("none", _one_of("zsh", "fish", "bash", "none")),

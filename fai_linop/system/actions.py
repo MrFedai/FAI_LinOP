@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
-from fai_linop.core.common import WriteFile, read_text
+from fai_linop.core.common import EnableService, WriteFile, read_text
 from fai_linop.package.base import NotSupported
 from fai_linop.platform.detect import Family
 
@@ -168,6 +168,40 @@ class Upgrade(Action):
             raise NotSupported(f"system upgrade on {ctx.os.family.value} is not supported")
 
 
+LIBVIRT_PACKAGES = {"qemu", "virt-manager"}
+
+
+def selected_ids(ctx: Context) -> set[str]:
+    """Catalog ids this profile asks for (groups + extra + custom file)."""
+    from fai_linop.package.actions import profile_extra_names  # local: package.actions imports this module
+    from fai_linop.package.resolve import wanted_entries
+    ids = {e.id for e in wanted_entries(ctx.profile.get("packages", "groups"))}
+    return ids | set(profile_extra_names(ctx))
+
+
+def anydesk_native(ctx: Context) -> bool:
+    """AnyDesk from the distro / AUR ships `anydesk.service`; the Flatpak has no unit."""
+    from fai_linop.package.actions import resolution
+    res = resolution(ctx)
+    return any(n in group for group in (res.installed, res.native, res.aur, res.deferred)
+               for n in ("anydesk", "anydesk-bin"))
+
+
+def service_actions(ctx: Context) -> list[Action]:
+    """F34: enable libvirtd / AnyDesk only when the profile selects the package; nothing otherwise."""
+    selected = selected_ids(ctx)
+    actions: list[Action] = []
+    if selected & LIBVIRT_PACKAGES:
+        svc = EnableService("system.libvirtd", "libvirtd.service", "libvirtd (virtual machines)")
+        svc.requires = ("packages.native",)
+        actions.append(svc)
+    if "anydesk" in selected:
+        svc = EnableService("system.anydesk", "anydesk.service", "AnyDesk service", when=anydesk_native)
+        svc.requires = ("packages.native",)
+        actions.append(svc)
+    return actions
+
+
 @register("system", "System", order=10)
 def build(ctx: Context):
-    return [KeyringReset(), Mirrors(), Multilib(), Upgrade()]
+    return [KeyringReset(), Mirrors(), Multilib(), Upgrade(), *service_actions(ctx)]
