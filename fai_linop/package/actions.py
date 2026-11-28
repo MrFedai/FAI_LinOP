@@ -12,6 +12,7 @@ from pathlib import Path
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
 from fai_linop.core.common import EnableService
 from fai_linop.core.runner import CommandError
+from fai_linop.package import catalog as cat
 from fai_linop.package.base import PackageManager
 from fai_linop.package.providers import Apt, AurHelper, Flatpak, Pacman, native_for
 from fai_linop.package.resolve import DEFERRED, Resolution, resolve, settle_aur, settle_repos, wanted_entries
@@ -264,6 +265,57 @@ def request(ctx: Context, ids: list[str] = (), names: list[str] = ()) -> None:
     in the same transactions (call from a module's build(), before planning)."""
     ctx.facts.setdefault("package_ids", []).extend(i for i in ids if i not in ctx.facts["package_ids"])
     ctx.facts.setdefault("package_names", []).extend(n for n in names if n not in ctx.facts["package_names"])
+
+
+class ModuleRequests:
+    """Staged run (D30): the packages ONE module asks for are installed in that module's
+    own stage — the packages stage has long finished when a later module is asked about.
+
+        with ModuleRequests(ctx, "shell") as wanted:
+            own = module.build(ctx)                 # calls request(...)
+        actions = wanted.with_dependencies(own)     # install actions first, then the module's own
+
+    The install actions are the normal ones with the module in their id (`packages.native:shell`);
+    while the stage runs, `resolution(ctx)` is the resolution of exactly these packages.
+    The batch flow does not use this: there every request joins the one packages transaction."""
+
+    def __init__(self, ctx: Context, module: str):
+        self.ctx, self.module = ctx, module
+        self.ids: list[str] = []
+        self.names: list[str] = []
+
+    def __enter__(self) -> "ModuleRequests":
+        facts = self.ctx.facts
+        facts.pop("package_ids", None)
+        facts.pop("package_names", None)
+        facts.pop("packages", None)      # the previous stage's resolution
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.ids = self.ctx.facts.pop("package_ids", [])
+        self.names = self.ctx.facts.pop("package_names", [])
+        return False
+
+    def with_dependencies(self, own: list[Action]) -> list[Action]:
+        ctx, module = self.ctx, self.module
+        if module == "packages" or not (self.ids or self.names):
+            return own
+        if not ctx.profile.enabled("packages"):   # same rule as the batch flow: no packages module, no installs
+            ctx.ui.warn(f"packages are switched off — not installed for this module: {', '.join([*self.ids, *self.names])}")
+            return own
+        catalog = cat.load()
+        p = ctx.profile
+        ctx.facts["packages"] = resolve(ctx.os, ctx.runner, [catalog[i] for i in self.ids if i in catalog], self.names,
+                                        p.get("packages", "flatpak_fallback"), p.get("packages", "aur_helper"),
+                                        repos_pending=multilib_pending(ctx))
+        installs: list[Action] = [InstallNative(), InstallAurHelper(), InstallAur(), SetupFlathub(), InstallFlatpak()]
+        base = {a.id for a in installs}
+        for a in installs:
+            a.requires = tuple(f"{r}:{module}" if r in base else r for r in a.requires)
+            a.id, a.module = f"{a.id}:{module}", module
+        for a in own:   # "requires packages.native" also means: this stage's own install
+            a.requires = tuple(a.requires) + tuple(f"{r}:{module}" for r in a.requires if r in base)
+        return installs + own
 
 
 LIBVIRT_PACKAGES = {"qemu", "virt-manager"}

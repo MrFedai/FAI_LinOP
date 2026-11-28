@@ -21,6 +21,23 @@ class Aborted(Exception):
     """The run cannot go on (preflight failed); nothing more is asked or applied."""
 
 
+class NoRequests:
+    """Default for `StagedRun(requests=...)`: modules ask for no packages. The real one is
+    `fai_linop.package.actions.ModuleRequests`, handed in by the CLI."""
+
+    def __init__(self, ctx: Context, module: str):
+        pass
+
+    def __enter__(self) -> "NoRequests":
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+    def with_dependencies(self, own: list) -> list:
+        return own
+
+
 class Stage:
     """One module of a staged run."""
 
@@ -38,7 +55,9 @@ class Stage:
             ctx.ui.info("  skipped")
             return
         ctx.journal.write("stage", module=name, enabled=True)
-        plan = build_plan(ctx, module_actions(ctx, self.module), run.done)
+        with run.requests(ctx, name) as wanted:      # packages this module needs: installed in this stage
+            own = module_actions(ctx, self.module)
+        plan = build_plan(ctx, wanted.with_dependencies(own), run.done)
         run.add(plan)
         show_plan(ctx, plan, nothing="Already set up — nothing to change.")
         if plan.pending and not ctx.dry_run:
@@ -70,8 +89,9 @@ class Stage:
 class StagedRun:
     def __init__(self, ctx: Context, *, save: Callable, prepare: Callable[[], bool],
                  keep_going: bool = False, done: frozenset[str] | set[str] = frozenset(),
-                 answered: frozenset[str] | set[str] = frozenset()):
+                 answered: frozenset[str] | set[str] = frozenset(), requests: type = NoRequests):
         self.ctx = ctx
+        self.requests = requests          # collects the packages a module's build() asks for
         self.save = save                  # save(profile): called after every module's answers
         self._prepare = prepare           # preflight + snapshot; False = stop the run
         self.keep_going = keep_going

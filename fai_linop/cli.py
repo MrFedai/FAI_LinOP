@@ -203,12 +203,13 @@ class App:
             self.ui.error("non-interactive run: pass --yes (the answers then come from the profile)")
             return EXIT_USAGE
         ctx, done = self._start(profile, resume_from, staged=True)
+        from fai_linop.package.actions import ModuleRequests
         answered = {ev["module"] for ev in resume_from.events() if ev["event"] == "stage"} if resume_from else set()
         self.ui.info(f"FAI_LinOP {__version__} on {self.os.name} — profile: {self.profile_path}")
         self.ui.info("One module at a time: answer, review, apply. Enter takes the default; "
                      "Ctrl-C stops (`linop resume` continues)." + (" DRY RUN: nothing is changed or saved." if dry else ""))
         run = StagedRun(ctx, save=lambda p: self.save_profile(p, quiet=True), prepare=lambda: self._prepare(ctx),
-                        keep_going=self.args.keep_going, done=done, answered=answered)
+                        keep_going=self.args.keep_going, done=done, answered=answered, requests=ModuleRequests)
         plan = run.run()
         if run.aborted:
             return EXIT_FAILED

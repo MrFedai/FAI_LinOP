@@ -51,9 +51,9 @@ class Session:
         self.prompts.append((prompt, [p.name for p in self.watch if p.exists()]))
         return next(self.answers)
 
-    def app(self, command="default", yes=False, dry=False, interactive=True, verbose=False):
+    def app(self, command="default", yes=False, dry=False, interactive=True, verbose=False, keep_going=False):
         from fai_linop.cli import App
-        args = argparse.Namespace(command=command, profile=None, dry_run=dry, yes=yes, keep_going=False,
+        args = argparse.Namespace(command=command, profile=None, dry_run=dry, yes=yes, keep_going=keep_going,
                                   verbose=verbose, run_id=None, what="show")
         ui = UI(Console(file=self.out, width=200), input_fn=self._input, assume_yes=yes, interactive=interactive,
                 verbose=verbose)
@@ -71,6 +71,7 @@ def registry(monkeypatch):
     """An empty module registry (the real modules are not loaded) and a preflight that counts its calls."""
     from fai_linop import modules
     calls = []
+    modules.load()                  # import the real modules first, so no later import registers into the test registry
     monkeypatch.setattr(modules, "load", lambda: None)
     monkeypatch.setattr(preflight, "run", lambda *a, **k: calls.append(1) or True)
     root = logging.getLogger("fai_linop")
@@ -222,3 +223,62 @@ def test_short_output_by_default_and_table_with_verbose(tmp_path, registry):
     v = Session(tmp_path, ["y", "n"])
     assert v.app(verbose=True).cmd_default() == 0
     assert "pkg7" in v.text and "FAI_LinOP plan" in v.text
+
+
+# ---- packages a module asks for are installed in that module's own stage ----------------------------
+
+def shell_module(tmp_path, marker):
+    """A module that needs `zsh` (catalog id) — like the real shell module."""
+    from fai_linop.package.actions import request
+
+    def build(ctx):
+        request(ctx, ids=["zsh"])
+        return [Touch("shell.rc", marker, requires=("packages.native",))]
+
+    register("shell", "Shell", order=75)(build)
+
+
+def arch_app(session, fs, profile="", **kw):
+    app = session.app(**kw)
+    app.runner = fs.runner
+    app.profile_path.parent.mkdir(parents=True, exist_ok=True)
+    app.profile_path.write_text(profile)
+    return app
+
+
+def test_a_later_module_gets_its_packages_in_its_own_stage(tmp_path, registry):
+    from test_v301_package_resolve import FakeSystem
+    marker = tmp_path / "rc"
+    shell_module(tmp_path, marker)
+    fs = FakeSystem(repo=["zsh", "git", "curl"])
+    s = Session(tmp_path, ["y", "", "y"], watch=(marker,))       # Configure the shell? / Shell [zsh] / Apply Shell?
+    app = arch_app(s, fs)
+    assert app.cmd_default() == 0 and marker.exists()
+    assert fs.installed == {"zsh"}                               # only what the module asked for, not the base group
+    assert "Install packages from the distro repositories: 1 package(s) — 1 repo" in s.text
+    status = Journal.open(app.paths.runs).action_status()
+    assert status["packages.native:shell"] == "done" and status["shell.rc"] == "done"
+    assert ("sudo", "--", "pacman", "-S", "--needed", "--noconfirm", "zsh") in fs.runner.calls
+
+
+def test_module_action_is_blocked_when_its_own_install_fails(tmp_path, registry):
+    from test_v301_package_resolve import FakeSystem
+    marker = tmp_path / "rc"
+    shell_module(tmp_path, marker)
+    fs = FakeSystem(repo=["zsh"])
+    fs.runner.on("pacman", "-Qq", result=lambda c, i: "")        # the install "succeeds" but nothing is there: verify fails
+    s = Session(tmp_path, ["y", "", "y"])
+    app = arch_app(s, fs, keep_going=True)
+    assert app.cmd_default() == 1 and not marker.exists()
+    assert "requires failed action(s): packages.native:shell" in s.text
+
+
+def test_packages_switched_off_installs_nothing_and_says_so(tmp_path, registry):
+    from test_v301_package_resolve import FakeSystem
+    marker = tmp_path / "rc"
+    shell_module(tmp_path, marker)
+    fs = FakeSystem(repo=["zsh"])
+    s = Session(tmp_path, ["y", "", "y"])
+    app = arch_app(s, fs, profile="[modules]\npackages = false\n")
+    assert app.cmd_default() == 0 and marker.exists() and fs.installed == set()
+    assert "packages are switched off" in s.text and "zsh" in s.text
