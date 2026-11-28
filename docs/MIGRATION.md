@@ -68,3 +68,5 @@ On Debian/Ubuntu/Fedora, packages the distro does not ship fall back to Flathub 
 ## Wallpapers
 
 `wallp/` is no longer in the repository (D25). The default is a solid black background. To use an image: `[wallpaper] mode = "file"`, `file = "/path/to/image.jpg"`.
+
+Private repository: set `[wallpaper] repo = "https://github.com/MrFedai/wallp.git"` (the owner's profile). FAI_LinOP clones it into `~/Pictures/wallp` with your own git credentials (`git pull --ff-only` when it is already there). A relative `file` (e.g. `file = "x.jpg"`) is read from that directory; absolute and `~` paths work as before. Without credentials the clone is skipped with a warning; the default stays solid black.

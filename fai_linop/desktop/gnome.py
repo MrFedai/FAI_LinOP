@@ -9,6 +9,7 @@ import os
 
 from fai_linop.core.paths import current_user
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk, register
+from fai_linop.desktop.wallpaper import WallpaperRepo, wallpaper_dir
 from fai_linop.dotfiles.rules import WALLPAPER_KEYS, WALLPAPER_SECTIONS
 from fai_linop.optimization.actions import simulate_removal
 from fai_linop.package.actions import request
@@ -30,7 +31,10 @@ def render_gno(ctx: Context, text: str) -> str:
     mode = ctx.profile.get("wallpaper", "mode")
     uri = ""
     if mode == "file":
-        path = os.path.expanduser(ctx.profile.get("wallpaper", "file"))
+        path = ctx.profile.get("wallpaper", "file")
+        if path and not path.startswith(("/", "~")):
+            path = str(wallpaper_dir(ctx) / path)  # relative: inside the wallpaper repo clone
+        path = os.path.expanduser(path)
         uri = f"file://{path}" if path else ""
     out, section = [], None
     for line in text.splitlines(keepends=True):
@@ -136,4 +140,7 @@ class Debloat(Action):
 @register("gnome", "GNOME", order=40)
 def build(ctx: Context):
     request(ctx, ids=["wl-clipboard", "adw-gtk-theme", "gnome-shell-extension-clipboard-indicator"])
-    return [ApplyGnomeSettings(), Debloat()]
+    actions = [ApplyGnomeSettings(), Debloat()]
+    if ctx.profile.get("wallpaper", "repo"):
+        actions.insert(0, WallpaperRepo())
+    return actions
