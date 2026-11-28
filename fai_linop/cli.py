@@ -192,6 +192,12 @@ class App:
                 self.ui.info("No filesystem snapshot tool configured — changed files are backed up individually.")
         execute(ctx, plan, keep_going=self.args.keep_going)
         code = report(ctx, plan)
+        if self.os.is_linux and not self.runner.dry_run:
+            from fai_linop.hardware.linux import detect as detect_hw
+            from fai_linop.hardware.linux import modeset_note
+            note = modeset_note(ctx.facts.get("hardware") or detect_hw(self.runner))
+            if note:
+                self.ui.warn(note)
         if code == EXIT_OK and has_partial(plan):
             code = EXIT_PARTIAL
         if not self.runner.dry_run and any(p.action.reboot and p.status == "done" for p in plan.items) \
@@ -393,14 +399,20 @@ class App:
     def cmd_doctor(self) -> int:
         provider = snapshot.detect(self.runner) if self.os.is_linux else None
         hw_rows = []
+        modeset_warning = None
         if self.os.is_linux:
             from fai_linop.hardware.linux import detect as detect_hw
+            from fai_linop.hardware.linux import modeset_note, modeset_row
             hw = detect_hw(self.runner)
             gpus = ", ".join(f"{g.vendor}:{g.device_id:04x}{' (open modules ok)' if g.nvidia_open_capable else ''}"
                              for g in hw.gpus) or "none"
             hw_rows = [("GPU", gpus), ("CPU", hw.cpu_vendor), ("RAM", f"{hw.ram_mb} MiB"),
                        ("Root disk", {True: "HDD", False: "SSD/NVMe", None: "unknown"}[hw.root_rotational]),
                        ("Kernels", ", ".join(hw.kernels) or "unknown"), ("Virtualization", hw.virtualization)]
+            row = modeset_row(hw)
+            if row:
+                hw_rows.append(row)
+            modeset_warning = modeset_note(hw)
         sec_rows = []
         if self.os.is_linux:
             from fai_linop.security.actions import security_rows
@@ -415,6 +427,8 @@ class App:
             ("Snapshot tool", provider.name if provider else "none (per-file backups)"),
             *sec_rows,
         ])
+        if modeset_warning:
+            self.ui.warn(modeset_warning)
         return EXIT_OK
 
 

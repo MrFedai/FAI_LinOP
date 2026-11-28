@@ -9,6 +9,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from fai_linop.core.common import read_text
 from fai_linop.core.runner import Runner
 
 PCI_VENDORS = {"0x10de": "nvidia", "0x1002": "amd", "0x1022": "amd", "0x8086": "intel",
@@ -130,3 +131,41 @@ def detect(runner: Runner | None = None, root: Path = Path("/")) -> Hardware:
         res = runner.run(["systemd-detect-virt"], mutating=False, check=False, timeout=10)
         hw.virtualization = res.stdout.strip() or "none"
     return hw
+
+
+def nvidia_modeset(root: Path = Path("/")) -> bool | None:
+    """State of `nvidia_drm.modeset`: True/False, or None when the module is not loaded."""
+    text = read_text(root / "sys/module/nvidia_drm/parameters/modeset")
+    if text is None:
+        return None
+    value = text.strip().upper()
+    if value in ("Y", "1"):
+        return True
+    if value in ("N", "0"):
+        return False
+    return None
+
+
+MODESET_OFF_NOTE = ("NVIDIA DRM modeset is OFF — add `nvidia_drm.modeset=1` to the kernel command line "
+                    "(bootloader) or `options nvidia_drm modeset=1` to a file in /etc/modprobe.d/, "
+                    "rebuild the initramfs, then reboot. FAI_LinOP does not change the bootloader.")
+MODESET_NO_MODULE_NOTE = ("nvidia_drm module is not loaded — install/enable the NVIDIA driver, "
+                          "then re-check with `linop doctor`.")
+
+
+def modeset_note(hw: Hardware, root: Path = Path("/")) -> str | None:
+    """Warning text when an NVIDIA GPU is present and modeset is not on (audit only)."""
+    if "nvidia" not in hw.gpu_vendors:
+        return None
+    state = nvidia_modeset(root)
+    if state is True:
+        return None
+    return MODESET_OFF_NOTE if state is False else MODESET_NO_MODULE_NOTE
+
+
+def modeset_row(hw: Hardware, root: Path = Path("/")) -> tuple[str, str] | None:
+    """`linop doctor` row; None when there is no NVIDIA GPU."""
+    if "nvidia" not in hw.gpu_vendors:
+        return None
+    state = nvidia_modeset(root)
+    return ("NVIDIA DRM modeset", {True: "on", False: "OFF (see note)", None: "module not loaded"}[state])
