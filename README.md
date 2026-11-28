@@ -15,7 +15,7 @@ git clone https://github.com/MrFedai/FAI_LinOP.git ~/FAI_LinOP && ~/FAI_LinOP/se
 
 - Run it as your **normal user**, not with `sudo` — FAI_LinOP asks for sudo only for the commands that need it.
 - Needs `git` (`sudo pacman -S git` · `sudo apt install git` · `sudo dnf install git`).
-- `setup.sh` only prepares [uv](https://docs.astral.sh/uv/) (distro package on Arch/Fedora; on Debian/Ubuntu `python3-venv` + uv in a private venv — never `curl | sh`) and starts the wizard: **questions → plan → one confirmation → apply**.
+- `setup.sh` only prepares [uv](https://docs.astral.sh/uv/) (distro package on Arch/Fedora; on Debian/Ubuntu `python3-venv` + uv in a private venv — never `curl | sh`) and starts the setup, **one module at a time: question → short summary → confirm → apply → next module**.
 
 | Want to… | Run |
 |---|---|
@@ -32,7 +32,7 @@ v3 is a rewrite of [ArCoN v2.5](legacy/v2.5/README.md), a 1885-line Bash script,
 
 What makes v3 different from a setup script:
 
-- **Plan first, one confirmation.** All questions are asked up front; you see every package, file, setting and service with its risk before anything changes.
+- **One module at a time.** Each module (system, packages, GNOME, …) is asked, summarised and applied before the next one is even asked about — no long questionnaire up front, no long wait afterwards. Output is short; `-v` shows every package, setting and service.
 - **Journal + rollback.** Every run is logged; changed files and GNOME settings are backed up and can be restored. Snapper/Timeshift snapshots are used when available.
 - **Idempotent.** Run it again and it prints "Nothing to do" — or continues where an interrupted run stopped (`linop resume`).
 - **Your dotfiles stay yours.** `configs/` (GNOME `gno.conf`, Terminator, Hyprland) is deployed byte-identical in its native format; only documented substitutions (user name, wallpaper) are made.
@@ -57,9 +57,21 @@ What makes v3 different from a setup script:
 ## How a run works
 
 ```
-wizard (all questions up front) -> plan (every package, file, setting, service; risk; reversibility)
-  -> one confirmation -> preflight (disk, network, live ISO, pacman lock, sudo) -> snapshot if Snapper/Timeshift
-  -> apply + verify each action -> report from real results -> reboot prompt only if needed
+for each module, in order (System, Packages, Monitors, GNOME, Hyprland, Gaming, Dotfiles, Terminal, Shell,
+                           Security, BlackArch, Optimization, Cleanup):
+    "want this module?" -> its own questions -> short summary of the changes -> confirm
+      -> (first time only: preflight — disk, network, live ISO, pacman lock, sudo — and a Snapper/Timeshift snapshot)
+      -> apply + verify each action
+then: report from real results -> reboot prompt only if needed
+```
+
+A module you decline is skipped; your answers are saved after every module and are the defaults next time (Enter keeps them).
+Confirming a summary is `Enter` — except when the module contains a high-risk or one-way action, where the default is "no".
+`linop apply` is the unattended form: the whole saved profile, one plan, one confirmation (or `--yes`).
+
+```
+short output:   • Install packages from the distro repositories: 41 package(s) — 40 repo, 1 AUR
+with -v:        the full table (every package name, setting and service, risk, reversibility)
 ```
 
 - **Dry run** (`linop plan`, `-n`): read-only probes run, every change is only shown; no file is written (no profile, journal or state). GNOME monitor changes are checked by Mutter itself ("verify" mode).
@@ -73,9 +85,9 @@ wizard (all questions up front) -> plan (every package, file, setting, service; 
 
 | Command | What it does |
 |---|---|
-| `linop` | wizard → plan → confirm → apply |
-| `linop plan` / `linop apply` | dry run / apply the saved profile |
-| `linop wizard` | answer the questions, save the profile |
+| `linop` | staged setup: per module ask → review → apply |
+| `linop plan` / `linop apply` | dry run / apply the whole saved profile with one confirmation (unattended: `--yes`) |
+| `linop wizard` | answer all questions, save the profile, apply nothing |
 | `linop resume` | continue an interrupted or failed run |
 | `linop rollback [RUN]` | restore files, dconf and the GNOME monitor layout changed by a run (default: the latest real run; dry runs and rollbacks are never `latest`) |
 | `linop runs` | list runs |
@@ -85,11 +97,11 @@ wizard (all questions up front) -> plan (every package, file, setting, service; 
 | `linop reset [--uninstall] [--gnome]` | Smart Factory Reset (backup first, typed `CLEAN`) |
 | `linop doctor` | detected OS, GPU, disk, kernels, snapshot tool |
 
-Global options work before or after the command: `--profile FILE`, `-n/--dry-run`, `-y/--yes` (never answers typed confirmations), `--keep-going`, `-v`.
+Global options work before or after the command: `--profile FILE`, `-n/--dry-run`, `-y/--yes` (never answers typed confirmations), `--keep-going`, `-v` (full tables instead of the short summary).
 
 ## Profile
 
-The wizard saves your answers to `~/.config/linop/profile.toml` and offers to reuse them next time. `linop profile init` writes a template with every key documented ([fai_linop/data/profile.template.toml](fai_linop/data/profile.template.toml)). Unknown keys and invalid values are errors. The owner's profile: [profiles/mrfedai.toml](profiles/mrfedai.toml).
+Your answers are saved to `~/.config/linop/profile.toml` after every module and are the defaults of the next run. `linop profile init` writes a template with every key documented ([fai_linop/data/profile.template.toml](fai_linop/data/profile.template.toml)). Unknown keys and invalid values are errors. The owner's profile: [profiles/mrfedai.toml](profiles/mrfedai.toml).
 
 ## Platform status (honest)
 
@@ -99,7 +111,7 @@ The wizard saves your answers to `~/.config/linop/profile.toml` and offers to re
 | Debian / Ubuntu | full scope (one provider); real `apply` + `rollback` pass in container CI on debian:stable and ubuntu:24.04 (packages, dconf, dotfiles, shell); one-line install verified on a fresh minimal Ubuntu 24.04 |
 | Fedora | full scope; unit tested; container CI (real run) under investigation |
 | Derivatives (EndeavourOS, CachyOS, Mint, Nobara, …) | run as their parent family, marked *experimental* |
-| Windows, macOS | interfaces only — FAI_LinOP v3.0 changes nothing there |
+| Windows, macOS | not part of this project (separate repository); `linop` exits with "Linux only" |
 
 Nothing has been run on real hardware yet (GPU drivers, monitors, Hyprland). Details and evidence: [docs/TESTING.md](docs/TESTING.md), [docs/PROGRESS.md](docs/PROGRESS.md).
 

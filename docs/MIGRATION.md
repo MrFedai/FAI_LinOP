@@ -12,7 +12,7 @@ v2.5 CLI compatibility is not provided (D7). This guide maps every v2.5 prompt t
 | v2.5 | v3 |
 |---|---|
 | `chmod +x setup.sh && ./setup.sh` | `./setup.sh` (same file name, now a bootstrap for `linop`) |
-| prompts during the whole install | all questions first (`linop wizard`), then one confirmation |
+| prompts during the whole install | the same rhythm, one module at a time: question → short summary → confirm → apply (`linop`). Unattended: `linop apply --yes` with a saved profile |
 | — | `linop plan` (dry run), `linop resume`, `linop rollback`, `linop runs` |
 | `sudo ./setup.sh` | refused — run as your user |
 

@@ -138,3 +138,12 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Risks:** size queries differ per package manager (dnf 4 vs 5) and are only parsed from fixtures; the alacritty-theme commit pin is not re-verified against upstream in CI; AnyDesk service is skipped for Flatpak by design.
 - **Deviations:** none.
 - **Questions for the owner:** none.
+
+## Staged setup + Linux only (D30, D31 — owner decisions 2026-11-28) · branch `feat/kademeli-kurulum`
+
+- **Done:** D30 (replaces D14): `linop` runs one module at a time — question → the module's own questions → short summary → confirm → apply → next (`core/staged.py`: `StagedRun`, `Stage`; `core/wizard.py`: `Wizard.ask_module`). Answers saved after every module; preflight + snapshot once, right before the first real change; `linop resume` asks only modules not asked yet (journal `stage` events); `linop apply` / `plan` keep the batch flow. Short output by default (one line per action, packages counted per source, file diffs always shown — D10), full tables with `-v`; the final report lists only failed / partial / not-run actions plus a one-line summary. D31 (replaces D3): Windows / macOS stubs and `setup.ps1` removed, `linop` exits 3 with "Linux only" elsewhere; FEATURE_MATRIX lost its Windows / macOS columns.
+- **Evidence:** local `ci` job (compileall + `bash -n` + full pytest): 341 passed, 3 skipped (UNIT; the skips need a container). 13 new tests in `tests/unit/test_staged.py` (interleaving proven: module 1 is applied before module 2 is asked). Dry run of the owner profile on Ubuntu 26.04 (`linop -n`, state redirected to a scratch dir): 13 modules, 57 lines of output, exit 0.
+- **NOT tested:** a real (non-dry) staged run on any machine; container CI on this branch (not pushed); native run on the owner's Arch machine; `linop resume` after a real Ctrl-C (only the failed-action path is unit tested).
+- **Risks:** the short summary cuts setting / service lists after 6 entries (the full list needs `-v`); with `--yes` the "Apply <module>?" question is answered yes even for one-way actions (same as the batch flow before); BlackArch is still asked on non-Arch distros.
+- **Deviations:** D14 and D3 are superseded by D30 and D31 — both by owner request, recorded in CLAUDE.md.
+- **Questions for the owner:** none.

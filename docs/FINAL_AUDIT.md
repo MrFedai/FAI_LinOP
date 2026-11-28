@@ -43,7 +43,7 @@ Verdicts: **PASS** (tested at the stated level) · **PARTIAL** (some paths teste
 | Optimization / cleanup (F27, F32) | PARTIAL | UNIT | |
 | Factory reset (F10) | PARTIAL | UNIT | configs backup/restore tested; package removal and dconf reset only with FakeRunner |
 | Reboot prompt (F33) | NOT TESTED | — | |
-| Windows / macOS (D3) | PASS | UNIT | stubs refuse with exit 3 |
+| Windows / macOS (D31, replaces D3) | PASS | UNIT | removed from the project; `linop` exits 3 with "Linux only" |
 | CI workflow | NOT TESTED | — | needs the branch on GitHub |
 
 No FAIL verdicts. Every v2.5 feature is in `docs/FEATURE_MATRIX.md` (keep / replace / fix / N-A); nothing was dropped silently.
