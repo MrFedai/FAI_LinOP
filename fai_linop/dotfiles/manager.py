@@ -4,6 +4,7 @@ format; only the D18 substitutions are applied (checked by rules.check)."""
 from __future__ import annotations
 
 import difflib
+import re
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -172,6 +173,25 @@ def _block_of(text: str) -> str:
     return text[start:end]
 
 
+# font family named in a dotfile -> catalog id of the package that ships it
+FONT_PACKAGES = {"Adwaita Mono": "font-adwaita-mono", "JetBrainsMono Nerd Font": "font-jetbrains-nerd"}
+_TERMINATOR_FONT = re.compile(r"^\s*font\s*=\s*(.+?)\s+\d+(?:\.\d+)?\s*$", re.MULTILINE)
+
+
+def font_packages(terminator_config: str) -> list[str]:
+    """Catalog ids of the fonts a Terminator config asks for (`font = Adwaita Mono 10`).
+    A config is useless without its font: the terminal falls back to a proportional one.
+    The file itself is never changed (D8) — only the package is requested."""
+    families = {m.group(1) for m in _TERMINATOR_FONT.finditer(terminator_config)}
+    return sorted(FONT_PACKAGES[f] for f in families if f in FONT_PACKAGES)
+
+
 @register("dotfiles", "Dotfiles", order=60)
 def build(ctx: Context):
-    return [DeployDotfile(d) for d in DOTFILES if d.module == "dotfiles"]
+    from fai_linop.package.actions import request
+    wanted = [d for d in DOTFILES if d.module == "dotfiles"]
+    for d in wanted:
+        source = ctx.repo_root / d.source
+        if d.name == "terminator" and source.exists():
+            request(ctx, ids=font_packages(source.read_text(errors="replace")))
+    return [DeployDotfile(d) for d in wanted]

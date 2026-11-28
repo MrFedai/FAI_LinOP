@@ -6,6 +6,9 @@
 - **Staged setup (D30, replaces D14).** `linop` no longer asks every question up front and then applies everything after one confirmation. It goes one module at a time, like ArCoN v2.5: "want this module?" → the module's own questions → a short summary → confirm → apply → next module. Answers are saved after every module. Preflight and the snapshot run once, right before the first real change. `linop resume` asks only the modules that were not asked yet. `linop apply` keeps the batch flow (saved profile, one confirmation or `--yes`); `linop wizard` still only saves the profile.
 - **Short output.** The summary is one line per action (packages are counted per source, long setting lists are cut after 6 entries); file diffs are always shown (D10). The final report lists only what needs attention plus a one-line summary. `-v` brings back the full tables.
 
+### Fixed
+- **Terminator font.** `configs/terminator/config` asks for "Adwaita Mono 10", but nothing installed that font; without it the terminal falls back to a proportional font. The dotfiles module now requests the package of the font named in the config (`font-adwaita-mono`: Arch `adwaita-fonts`, Fedora `adwaita-mono-fonts`). Debian and Ubuntu do not package Adwaita Mono — there it is reported as "not available"; the config file itself is never changed (D8).
+
 ### Removed
 - **Windows and macOS (D31, replaces D3).** The stubs (`Family.WINDOWS/MACOS`, `Tier.STUB`, `Winget`, `Homebrew`) and `setup.ps1` are gone; they get their own repository. On a non-Linux system `linop` exits with "Linux only" (exit code 3).
 

@@ -147,3 +147,12 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **Risks:** the short summary cuts setting / service lists after 6 entries (the full list needs `-v`); with `--yes` the "Apply <module>?" question is answered yes even for one-way actions (same as the batch flow before); BlackArch is still asked on non-Arch distros.
 - **Deviations:** D14 and D3 are superseded by D30 and D31 — both by owner request, recorded in CLAUDE.md.
 - **Questions for the owner:** none.
+
+### Follow-up on the same branch (2026-11-28) · commits `3334863`, font commit
+
+- **Done:** (1) **Bug in the first staged commit, fixed:** packages that a later module asks for in its `build()` (zsh, kitty, steam, security tools) were never installed, because the packages stage had already finished. `ModuleRequests` (package/actions.py) now collects each module's requests and runs the install actions (`packages.native:<module>` …) in that module's own stage, before its own actions; `requires = ("packages.native",)` also covers the stage's own install. Batch flow unchanged. (2) **Terminator font:** catalog entry `font-adwaita-mono`, requested by the dotfiles module from the `font =` line of the Terminator config.
+- **Evidence:** full local `ci`: 349 passed, 3 skipped (UNIT). Dry run on Ubuntu 26.04 with gaming + security + fish + kitty switched on: every stage lists its own installs (Gaming 3 repo + 1 Flathub, Terminal 1, Shell 2, Security 7). Font names checked on archlinux.org (file list), packages.fedoraproject.org, packages.debian.org, packages.ubuntu.com.
+- **NOT tested:** a real staged run; the font install on a real Arch / Fedora machine; Fedora file list of `adwaita-mono-fonts` (name and description only).
+- **Risks:** on Debian / Ubuntu the Terminator config still names a font that is not installed — FAI_LinOP reports it, the terminal still falls back. Needs an owner decision (below).
+- **Deviations:** none.
+- **Questions for the owner:** Adwaita Mono is not packaged for Debian / Ubuntu. Options: leave it reported; or install the font files from the upstream GNOME release into `~/.local/share/fonts` (pinned download, new mechanism); or pick another font in `configs/terminator/config` (owner's file, D8).

@@ -817,6 +817,16 @@ debian = "fish"
 fedora = "fish"
 description = "Fish shell"
 
+[pkg.font-adwaita-mono]
+# The font of configs/terminator/config ("Adwaita Mono 10"). Requested by the dotfiles module.
+# Debian / Ubuntu: `fonts-adwaita` is a metapackage that only pulls Adwaita Sans — Mono is not
+# packaged there (checked 2026-11-28: packages.debian.org sid file list, packages.ubuntu.com).
+groups = ["terminal"]
+arch = "adwaita-fonts"
+debian = ""
+fedora = "adwaita-mono-fonts"
+description = "Adwaita Mono font (Terminator config)"
+
 [pkg.font-jetbrains-nerd]
 groups = ["shell"]
 arch = "ttf-jetbrains-mono-nerd"
