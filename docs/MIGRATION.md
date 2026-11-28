@@ -26,20 +26,21 @@ v2.5 CLI compatibility is not provided (D7). This guide maps every v2.5 prompt t
 | Update Base System (Mirrors/Keyrings) | `[modules] system`, `[system] upgrade / mirrors / keyring_reset / speedtest` |
 | Apply GNOME Settings | `[modules] gnome` |
 | Remove GNOME Bloatware | `[gnome] debloat` |
-| Enable Gaming Mode + GPU menu | `[modules] gaming`, `[gaming] gpu = "auto"` (detected) |
-| Package module, 4 groups, pacs.txt | `[packages] groups`, `extra`, `custom_file` |
+| Enable Gaming Mode + GPU menu | `[modules] gaming`, `[gaming] gpu = "auto"` (detected; the wizard still lets you pick `nvidia` / `amd` / `intel` / `none`) |
+| Package module, 4 groups, pacs.txt | `[packages] groups`, `extra`, `custom_file` (asked by the wizard) |
 | BlackArch menu 1/2/3 | `[modules] blackarch`, `[blackarch] install = core / full / remove` |
 | Install Hyprland Environment | `[modules] hyprland` |
-| Hyprland theme menu (Ax-Shell, Hyprdots, ML4W, JaKooLit) | not in v3.0 (D24) — deferred to v3.1; "Skip Theme" = v3 behaviour |
-| Restore Configs (Terminator, Wallpapers) | `[modules] dotfiles`; wallpapers: `[wallpaper]` |
-| Terminal emulator + theme | `[terminal] emulator`, `theme` |
-| Shell + theme | `[shell] name`, `zsh_theme`, `starship_preset` |
+| Hyprland theme menu (Ax-Shell, Hyprdots, ML4W, JaKooLit) | not in v3.0 or v3.1.0 (D24) — deferred (not in v3.1.0); "Skip Theme" = v3 behaviour |
+| Restore Configs (Terminator, Wallpapers) | `[modules] dotfiles`; wallpapers: `[wallpaper]` (`file` asked by the wizard) |
+| Terminal emulator + theme | `[terminal] emulator`, `theme` (asked by the wizard; Kitty "Cyberpunk" = `cyberpunk`, Alacritty "Omni" = `omni`) |
+| Shell + theme | `[shell] name`, `zsh_theme`, `starship_preset` (theme and preset are asked by the wizard) |
 | Security & Optimizations | `[modules] security` + `[security] …` (all opt-in), `[modules] optimization` + `[optimization] items` |
 | Start Security Scans | `[security] scans` |
 | Apply All Hardening Fixes | `[security] sysctl`, `firewall`, `ssh_root_login`, `ssh_disable_password` |
 | Activate Hardened Mode | `[security] opensnitch`, `usbguard` (no longer tied to the hardening prompt) |
-| Remove leftovers | `[modules] cleanup`, `[cleanup] orphans`, `cache` |
-| Reboot system now | asked at the end only when a change needs it |
+| Remove leftovers | `[modules] cleanup`, `[cleanup] orphans`, `cache` (cache mode asked by the wizard) |
+| Reboot system now | asked at the end only when a change needs it (v2.5 asked every time) |
+| enable `libvirtd` / AnyDesk service | done after the install when `qemu` / `virt-manager` or AnyDesk is selected (v3.1.0) |
 
 ## Behaviour that changed on purpose
 
@@ -59,6 +60,9 @@ v2.5 CLI compatibility is not provided (D7). This guide maps every v2.5 prompt t
 | Alacritty theme overwrote `alacritty.toml`; 404 pages saved as config | theme imported; `curl -f` | AUDIT #8 |
 | GameMode config in `~/.config/gamemode/gamemode.ini` | `~/.config/gamemode.ini` (where GameMode reads it) | D-08 |
 | "Internet OK" without checking; live-USB check commented out | both checked | F02, F05 |
+| reboot question after every run | asked only when an action that needs a reboot ran (owner decision 2026-11-27) | F33 |
+| AnyDesk service enabled whenever AnyDesk was chosen | only when AnyDesk is a native / AUR package; the Flatpak build has no systemd unit, so no service is enabled | F34 |
+| `kitty.conf` always written | written (with JetBrainsMono Nerd Font) only when it does not exist; an existing file is never touched | D10, F24 |
 
 ## Packages
 

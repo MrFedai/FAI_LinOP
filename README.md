@@ -5,7 +5,7 @@
 [![CI](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml/badge.svg)](https://github.com/MrFedai/FAI_LinOP/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
-![Status](https://img.shields.io/badge/v3.0.2-native%20test%20pending-yellow)
+![Status](https://img.shields.io/badge/v3.1.0-native%20test%20pending-yellow)
 
 ## Install — one line
 
@@ -43,15 +43,16 @@ What makes v3 different from a setup script:
 | Module | What it does |
 |---|---|
 | system | full upgrade; Arch: mirror ranking, multilib, optional keyring reset |
-| packages | groups (base, essentials, media, cyber, remote, privacy, power) from the distro repos, AUR (Arch) or Flatpak fallback |
+| packages | groups (base, essentials, media, cyber, remote, privacy, power) from the distro repos, AUR (Arch) or Flatpak fallback; size preview in the summary, per-package result, libvirtd / AnyDesk services |
 | gnome | dark theme, keybindings, app folders from `configs/gno.conf`; optional debloat |
+| wallpaper | solid black by default; optional private repo cloned to `~/Pictures/wallp` |
 | display | detects every monitor's best resolution/refresh rate, keeps your layout, falls back if a mode does not work |
 | hyprland | optional desktop with FAI_LinOP's own config and a generated monitor block |
 | dotfiles | deploys `configs/`; `linop dotfiles diff\|capture` compares or copies them back |
-| terminal / shell | Terminator/Kitty/Alacritty themes; Zsh + Oh-My-Zsh (pinned commits), Fish/Bash + Starship |
+| terminal / shell | Terminator/Kitty/Alacritty themes (incl. Kitty Cyberpunk, Alacritty Omni); Zsh + Oh-My-Zsh (pinned commits), Fish/Bash + Starship |
 | gaming | Steam, GameMode, MangoHud; GPU detected automatically (NVIDIA open/DKMS, AMD, Intel) |
-| security | all opt-in: firewall, sysctl hardening, SSH hardening, ClamAV, OpenSnitch, USBGuard, scans; BlackArch on Arch |
-| optimization / cleanup | ZRAM, SSD TRIM, Bluetooth; orphaned packages, package cache (keeps recent versions) |
+| security | all opt-in: firewall, sysctl hardening, SSH hardening, ClamAV, OpenSnitch, USBGuard, scans (first signature / baseline run, summary in `linop doctor`); BlackArch on Arch with its prerequisites |
+| optimization / cleanup | ZRAM, SSD TRIM, Bluetooth; orphaned packages, package cache (keeps recent versions); `linop reset` also removes your extra packages and can restore bash |
 
 ## How a run works
 

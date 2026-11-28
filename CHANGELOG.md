@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.1.0: v2.5 parity gaps closed (2026-11-28)
+
+Closes the v2.5 feature gaps listed in `docs/FEATURE_MATRIX.md` (items 3.1-3.11). No owner dotfile changed (D8).
+
+### Added
+- **Packages:** the summary screen shows download and installed size per package and in total (pacman, apt, dnf 4/5; unknown sizes are counted, a failing size query never aborts). Install reports a result per package: one bad package no longer hides the others (partial run has its own exit code).
+- **BlackArch:** prerequisites (JDK, rust, opencl) for `full`, multilib enabled when BlackArch is installed, `pacman-key --delete` on removal; the keyring reset switches `[blackarch]` off and back on (restored if the rebuild fails).
+- **Security:** first `freshclam` (only without a signature database), `rkhunter --propupd` (only without a baseline), OpenSnitch autostart copy (idempotent, backed up), and a read-only security summary in `linop doctor`.
+- **Reset:** `packages.extra` and `custom_file` names join `--uninstall` (protected packages excluded); named orphan sweep; `--shell` returns the login shell to bash and removes `~/.zshrc` (backed up).
+- **Wallpaper repo (D25):** `wallpaper.repo` is cloned (or `git pull --ff-only`) into `~/Pictures/wallp` with your git credentials; a relative `wallpaper.file` resolves there. Default stays solid black.
+- **NVIDIA:** `nvidia_drm.modeset` check as a `linop doctor` row and a run-end warning (audit only; the system is never changed).
+- **Services:** `libvirtd.service` (when `qemu` / `virt-manager` is selected) and `anydesk.service` (only when AnyDesk is native / AUR) are enabled after the install, in the packages module.
+- **Terminal:** Kitty theme `cyberpunk`, Alacritty theme `omni`; `kitty.conf` with JetBrainsMono Nerd Font is created only when absent.
+- **Preflight:** "slow connection" warning below 500 KiB/s (an unknown speed warns nothing).
+- **Wizard:** also asks terminal theme, zsh theme, Starship preset, `gaming.gpu`, `cleanup.cache`, `packages.custom_file` and `wallpaper.file`. Keys that stay profile-only are listed in `PROFILE_ONLY` and marked "(profile only)" in the template.
+
+### Changed
+- `nautilus` is part of the `hyprland` group (FAI_LinOP's Hyprland config launches it).
+- The alacritty-theme download is pinned to commit `52d05307…` instead of `master`.
+- The reboot prompt stays "only when needed" (owner decision 2026-11-27, code unchanged); documented in `docs/MIGRATION.md`.
+
+### Fixed
+- Service actions moved from the system module to the packages module so they run after the install, not before the package exists.
+
+### Test status
+UNIT: 328 passed, 3 skipped (local `ci` job on `dd07c7b`). INTEGRATION (container): NOT RUN for v3.1.0 yet (GitHub CI after push/tag). NATIVE: NOT TESTED.
+
 ## v3.0.2: Fedora login shell fix (2026-11-27)
 
 ### Fixed

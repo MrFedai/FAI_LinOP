@@ -129,3 +129,12 @@ D20–D28 recorded (Arch dual-boot + NVIDIA, English + rich CLI, Flatpak fallbac
 - **NOT tested:** Fedora 44 and older; native run on the owner's Arch machine.
 - **Deviations:** none.
 - **Questions for the owner:** none.
+
+## v3.1.0 v2.5 parity gaps (2026-11-28) · commits `8f82261`…`dd07c7b`
+
+- **Done:** items 3.1-3.11: package size preview + per-package result (`8f82261`), BlackArch prerequisites + first run of security tools + doctor summary (`2bc94c2`), reset parity (`48b2f88`), wallpaper repo (`43305fc`), NVIDIA modeset audit (`412d164`), libvirtd / AnyDesk services, Kitty/Alacritty themes, slow-connection warning, nautilus (`4c23450`, `9e06085`), wizard questions + `PROFILE_ONLY` (`dd07c7b`). Item 3.12: FEATURE_MATRIX (no PARTIAL / NOT MIGRATED / MISSING rows left), MIGRATION, CHANGELOG, README, TESTING, FINAL_AUDIT; version 3.1.0.
+- **Evidence:** local `ci` job on `dd07c7b`: 328 passed, 3 skipped (UNIT). Docs commit: ruff + `tests/unit/test_core.py`, `tests/unit/test_v310_wizard.py` green on the worktree code.
+- **NOT tested:** GitHub container CI for v3.1.0 (runs after push / tag); native run on the owner's Arch + NVIDIA machine (modeset, wallpaper clone, services, BlackArch prerequisites, security first runs, `reset --shell`); F33 reboot prompt has no unit test.
+- **Risks:** size queries differ per package manager (dnf 4 vs 5) and are only parsed from fixtures; the alacritty-theme commit pin is not re-verified against upstream in CI; AnyDesk service is skipped for Flatpak by design.
+- **Deviations:** none.
+- **Questions for the owner:** none.
