@@ -1,6 +1,6 @@
 [project]
 name = "fai-linop"
-version = "3.0.2"
+version = "3.1.0"
 description = "FAI_LinOP — system setup and configuration toolkit (v3 rewrite in Python)"
 readme = "README.md"
 requires-python = ">=3.11"
