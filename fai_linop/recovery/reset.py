@@ -5,10 +5,15 @@ profiles, editor settings, chat logins) is never touched — v2.5 deleted
 
 from __future__ import annotations
 
+import os
 import shutil
+from pathlib import Path
 
 from fai_linop.core.action import Action, Change, Context, Reversible, Risk
+from fai_linop.core.common import read_text
+from fai_linop.core.paths import current_user
 from fai_linop.package import catalog as cat
+from fai_linop.package.actions import profile_extra_names
 from fai_linop.package.providers import native_for
 from fai_linop.platform.detect import Family, OSInfo, Tier
 from fai_linop.recovery.backup import backup_dir, dconf_user
@@ -68,13 +73,65 @@ class ResetPackages(Action):
     id, title, risk, reversible = "reset.packages", "Uninstall packages FAI_LinOP installs (protected list kept)", Risk.HIGH, Reversible.PARTIAL
 
     def plan(self, ctx):
-        names = {e.native(ctx.os).removeprefix("aur:") for g in GROUPS for e in cat.group(g)} - {""} - protected_names(ctx.os)
+        names = {e.native(ctx.os).removeprefix("aur:") for g in GROUPS for e in cat.group(g)} - {""}
+        names |= set(profile_extra_names(ctx))   # packages.extra + packages.custom_file
+        names -= protected_names(ctx.os)
         self._names = sorted(native_for(ctx.os, ctx.runner).installed(names))
+        ctx.facts["reset_packages_planned"] = list(self._names)
         return [Change("package-remove", n) for n in self._names]
 
     def apply(self, ctx):
         ctx.journal.write("packages_removed", names=self._names)
         native_for(ctx.os, ctx.runner).remove(self._names)
+
+
+class ResetOrphans(Action):
+    """Sweep packages left unneeded by ResetPackages — by name, never a blanket autoremove."""
+    id, title, risk, reversible = "reset.orphans", "Remove orphaned packages left behind (listed by name)", Risk.HIGH, Reversible.NO
+
+    def plan(self, ctx):
+        gone = set(ctx.facts.get("reset_packages_planned", []))   # ResetPackages removes these anyway
+        self._names = sorted(native_for(ctx.os, ctx.runner).orphans() - protected_names(ctx.os) - gone)
+        return [Change("package-remove", n, "orphan") for n in self._names]
+
+    def apply(self, ctx):
+        if not self._names:
+            return
+        ctx.journal.write("orphans_removed", names=self._names)
+        native_for(ctx.os, ctx.runner).remove(self._names)
+
+
+class ResetShell(Action):
+    id, title, risk, reversible = "reset.shell", "Switch the login shell back to bash and remove ~/.zshrc (backed up)", Risk.HIGH, Reversible.PARTIAL
+
+    def plan(self, ctx):
+        from fai_linop.terminal.actions import ChangeShell
+        changes = []
+        self._bash = None
+        if os.path.basename(ChangeShell.login_shell(ctx)) != "bash":
+            self._bash = ChangeShell.shell_path("bash", read_text(Path("/etc/shells")) or "")
+            changes.append(Change("setting", "login shell -> bash", "chsh"))
+        self._zshrc = ctx.home / ".zshrc"
+        if self._zshrc.exists() or self._zshrc.is_symlink():
+            changes.append(Change("file-remove", str(self._zshrc), "backed up"))
+        else:
+            self._zshrc = None
+        return changes
+
+    def apply(self, ctx):
+        from fai_linop.terminal.actions import ChangeShell
+        current = ChangeShell.login_shell(ctx)
+        if os.path.basename(current) != "bash":
+            path = self._bash
+            if path is None:
+                if not ctx.dry_run:
+                    raise RuntimeError("bash is not listed in /etc/shells")
+                path = "/usr/bin/bash"
+            ctx.journal.write("login_shell", user=current_user(), previous=current, new=path)
+            ctx.runner.run(["chsh", "-s", path, current_user()], sudo=True)
+        if self._zshrc is not None and not ctx.dry_run:
+            if backup_dir(ctx.journal, self._zshrc) is not None:
+                self._zshrc.unlink()
 
 
 class ResetGnome(Action):
@@ -92,10 +149,12 @@ class ResetGnome(Action):
         ctx.runner.run(["dconf", "reset", "-f", "/"])
 
 
-def reset_actions(uninstall: bool, gnome: bool) -> list[Action]:
+def reset_actions(uninstall: bool, gnome: bool, shell: bool = False) -> list[Action]:
     actions: list[Action] = [ResetConfigs()]
     if uninstall:
-        actions.append(ResetPackages())
+        actions += [ResetPackages(), ResetOrphans()]
     if gnome:
         actions.append(ResetGnome())
+    if shell:
+        actions.append(ResetShell())
     return actions

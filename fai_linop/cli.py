@@ -88,6 +88,8 @@ def _parser() -> argparse.ArgumentParser:
     rs = sub.add_parser("reset", parents=common, help="Smart Factory Reset (backup first, typed confirmation)")
     rs.add_argument("--uninstall", action="store_true", help="also uninstall packages FAI_LinOP installs")
     rs.add_argument("--gnome", action="store_true", help="also reset all GNOME settings")
+    rs.add_argument("--shell", action="store_true",
+                    help="also switch the login shell back to bash and remove ~/.zshrc (backed up)")
     return p
 
 
@@ -352,13 +354,14 @@ class App:
         journal = Journal.create(self.paths.runs, command="reset", dry_run=self.runner.dry_run)  # real: latest
         setup_file_logging(journal.run_dir / "linop.log", self.args.verbose)
         ctx = self.context(self.load_profile(), journal)
-        plan = build_plan(ctx, reset_actions(self.args.uninstall, self.args.gnome))
+        plan = build_plan(ctx, reset_actions(self.args.uninstall, self.args.gnome, self.args.shell))
         show_plan(ctx, plan)
         if not plan.pending:
             return EXIT_OK
         if not self.runner.dry_run and not self.ui.typed_confirm(
                 "SMART FACTORY RESET — files and GNOME settings are backed up first; `linop rollback` restores them."
-                + (" Packages removed by --uninstall are NOT reinstalled by rollback." if self.args.uninstall else ""),
+                + (" Packages (and orphans) removed by --uninstall are NOT reinstalled by rollback." if self.args.uninstall else "")
+                + (" --shell switches your login shell back to bash and removes ~/.zshrc (backed up)." if self.args.shell else ""),
                 "CLEAN"):
             self.ui.info("Cancelled — nothing was changed.")
             journal.write("run_end", summary={"cancelled": True})

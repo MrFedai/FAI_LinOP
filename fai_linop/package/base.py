@@ -67,6 +67,10 @@ class PackageManager(ABC):
     @abstractmethod
     def remove(self, names: list[str]) -> None: ...
 
+    def orphans(self) -> set[str]:
+        """Packages nothing needs any more (read-only; a failing query means none)."""
+        return set()
+
     def sizes(self, names: Iterable[str]) -> dict[str, Size]:
         """Download / installed size per name from ONE query (read-only). Unknown = (None, None);
         a failing query never raises — the preview just shows "unknown"."""

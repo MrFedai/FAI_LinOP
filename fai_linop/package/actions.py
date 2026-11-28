@@ -35,17 +35,24 @@ def multilib_pending(ctx: Context) -> bool:
     return ctx.os.family is Family.ARCH and ctx.profile.enabled("system") and bool(Multilib().plan(ctx))
 
 
+def profile_extra_names(ctx: Context) -> list[str]:
+    """Names the profile asks for beyond the groups: `packages.extra` + `packages.custom_file` (pacs.txt)."""
+    p = ctx.profile
+    extra = list(p.get("packages", "extra"))
+    custom = p.get("packages", "custom_file")
+    if custom:
+        path = Path(custom) if Path(custom).is_absolute() else ctx.repo_root / custom
+        if path.exists():
+            extra += read_custom_file(path)
+        else:
+            ctx.ui.warn(f"custom package file not found: {path}")
+    return extra
+
+
 def resolution(ctx: Context) -> Resolution:
     if "packages" not in ctx.facts:
         p = ctx.profile
-        extra = list(p.get("packages", "extra"))
-        custom = p.get("packages", "custom_file")
-        if custom:
-            path = Path(custom) if Path(custom).is_absolute() else ctx.repo_root / custom
-            if path.exists():
-                extra += read_custom_file(path)
-            else:
-                ctx.ui.warn(f"custom package file not found: {path}")
+        extra = profile_extra_names(ctx)
         extra += ctx.facts.get("package_names", [])  # raw names requested by other modules (e.g. kernel headers)
         ids = ctx.facts.get("package_ids", [])       # catalog ids requested by other modules
         ctx.facts["packages"] = resolve(ctx.os, ctx.runner, wanted_entries(p.get("packages", "groups"), ids),

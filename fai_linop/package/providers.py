@@ -49,6 +49,10 @@ class Pacman(PackageManager):
         repo = set(self.runner.run(["pacman", "-Slq"], mutating=False, check=False, timeout=120).stdout.split())
         return set(names) & repo
 
+    def orphans(self) -> set[str]:
+        # rc 1 = no orphans
+        return set(self.runner.run(["pacman", "-Qtdq"], mutating=False, check=False, timeout=60).stdout.split())
+
     def install(self, names: list[str]) -> None:
         if names:
             self.runner.run(["pacman", "-S", "--needed", "--noconfirm", *names], sudo=True, interactive=True)
@@ -83,6 +87,9 @@ class AurHelper(PackageManager):
         if names:
             self.runner.run([self.name, "-S", "--needed", "--noconfirm", "--answerdiff", "None",
                              "--answerclean", "None", *names], interactive=True)
+
+    def orphans(self) -> set[str]:
+        return Pacman(self.runner).orphans()
 
     def remove(self, names: list[str]) -> None:
         Pacman(self.runner).remove(names)
@@ -125,6 +132,10 @@ class Apt(PackageManager):
         source); installation continues with the indexes that did update."""
         return self.runner.run([*self._env, "apt-get", "update"], sudo=True, interactive=True, check=False).ok
 
+    def orphans(self) -> set[str]:
+        out = self.runner.run(["apt-get", "-s", "autoremove"], mutating=False, check=False, timeout=120).stdout
+        return {parts[1] for parts in (l.split() for l in out.splitlines()) if len(parts) >= 2 and parts[0] == "Remv"}
+
     def install(self, names: list[str]) -> None:
         if names:
             self.runner.run([*self._env, "apt-get", "install", "-y", *names], sudo=True, interactive=True)
@@ -155,6 +166,11 @@ class Dnf(PackageManager):
         out = self.runner.run(["dnf", "-q", "repoquery", "--available", "--qf", "%{name}\n", *plain],
                               mutating=False, check=False, timeout=300).stdout if plain else ""
         return groups | (set(out.split()) & set(plain))
+
+    def orphans(self) -> set[str]:
+        out = self.runner.run(["dnf", "-q", "repoquery", "--unneeded", "--qf", "%{name}\n"],
+                              mutating=False, check=False, timeout=300).stdout
+        return set(out.split())
 
     def install(self, names: list[str]) -> None:
         if names:
