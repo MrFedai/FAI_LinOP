@@ -260,8 +260,15 @@ def test_registry_respects_profile_modules(tmp_path, ctx_factory):
 def test_wizard_asks_everything_up_front_and_saves(tmp_path):
     profile = Profile.load_or_default(tmp_path / "p.toml")
     answers = []
-    for q in QUESTIONS:  # enable everything, pick defaults for choices
-        answers.append("y" if not q.choices else "")
+    shadow = Profile.load_or_default(tmp_path / "shadow.toml")  # mirrors the answers so conditional questions line up
+    for q in QUESTIONS:  # enable everything, pick defaults for choices / free text
+        if not q.when(shadow):
+            continue
+        if q.choices or q.free:
+            answers.append("")
+        else:
+            answers.append("y")
+            shadow.set(q.section, q.key, True)
         if (q.section, q.key) == ("modules", "packages"):
             answers += ["y", "n", "y", "n", "n", "n"]  # essentials + cyber
     ui, _ = ui_with(answers)

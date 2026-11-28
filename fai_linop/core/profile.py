@@ -40,6 +40,14 @@ def _groups(v: Any) -> bool:
     return _str_list(v) and all(x in GROUPS for x in v)
 
 
+# Option lists: one source for the schema check AND the wizard's questions (V310 3.10).
+TERMINAL_THEMES = ("", "dracula", "nord", "gruvbox_dark", "tokyo_night", "cyberpunk", "omni")
+ZSH_THEMES = ("agnoster", "robbyrussell", "bira", "powerlevel10k")
+STARSHIP_PRESETS = ("", "pastel-powerline", "tokyo-night", "pure-preset", "gruvbox-rainbow",
+                    "nerd-font-symbols", "plain-text-symbols")
+GPUS = ("auto", "nvidia", "amd", "intel", "none")
+CACHE_MODES = ("trim", "none", "purge")
+
 OPTIMIZATIONS = ("fstrim", "bluetooth", "zram", "ananicy")
 
 
@@ -87,15 +95,14 @@ SCHEMA: dict[str, dict[str, tuple[Any, Callable[[Any], bool]]]] = {
     },
     "terminal": {
         "emulator": ("terminator", _one_of("terminator", "kitty", "alacritty", "gnome-terminal", "none")),
-        "theme": ("", _one_of("", "dracula", "nord", "gruvbox_dark", "tokyo_night", "cyberpunk", "omni")),
+        "theme": ("", _one_of(*TERMINAL_THEMES)),
     },
     "shell": {
         "name": ("none", _one_of("zsh", "fish", "bash", "none")),
-        "zsh_theme": ("agnoster", _one_of("agnoster", "robbyrussell", "bira", "powerlevel10k")),
-        "starship_preset": ("", _one_of("", "pastel-powerline", "tokyo-night", "pure-preset", "gruvbox-rainbow",
-                                         "nerd-font-symbols", "plain-text-symbols")),
+        "zsh_theme": ("agnoster", _one_of(*ZSH_THEMES)),
+        "starship_preset": ("", _one_of(*STARSHIP_PRESETS)),
     },
-    "gaming": {"gpu": ("auto", _one_of("auto", "nvidia", "amd", "intel", "none"))},
+    "gaming": {"gpu": ("auto", _one_of(*GPUS))},
     "blackarch": {"install": ("core", _one_of("core", "full", "remove"))},
     "security": {k: (False, _bool) for k in (
         "tools", "scans", "sysctl", "firewall", "ssh_root_login",
@@ -103,7 +110,7 @@ SCHEMA: dict[str, dict[str, tuple[Any, Callable[[Any], bool]]]] = {
     "optimization": {"items": (["fstrim", "bluetooth", "zram", "ananicy"], _optimizations)},
     "cleanup": {
         "orphans": (True, _bool),
-        "cache": ("trim", _one_of("trim", "none", "purge")),
+        "cache": ("trim", _one_of(*CACHE_MODES)),
     },
 }
 

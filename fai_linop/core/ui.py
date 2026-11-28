@@ -80,6 +80,14 @@ class UI:
                 return answer
             self.warn(f"choose 1-{len(choices)}")
 
+    def ask_text(self, question: str, default: str = "") -> str:
+        """Free text; empty input, --yes and non-interactive runs keep `default`."""
+        if self.assume_yes or not self.interactive:
+            return default
+        shown = f" [{default}]" if default else ""
+        answer = self._input(f"{question}{shown} ").strip()
+        return answer or default
+
     def typed_confirm(self, question: str, word: str) -> bool:
         """High-risk confirmation: the user must type `word` (never auto-yes)."""
         if not self.interactive:

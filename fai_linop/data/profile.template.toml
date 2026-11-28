@@ -2,7 +2,7 @@
 # Check it with `linop profile validate`, preview with `linop plan`.
 
 [profile]
-name = "default"
+name = "default"           # (profile only)
 
 [modules]                 # which parts run at all
 system = true             # full upgrade first (Arch: keyring, then -Su)
@@ -20,17 +20,17 @@ optimization = true
 cleanup = true
 
 [system]
-upgrade = true
+upgrade = true            # (profile only)
 mirrors = false           # Arch: reflector (mirrorlist backed up)
-keyring_reset = false     # Arch: delete and re-create the pacman keyring (HIGH risk)
-speedtest = false
+keyring_reset = false     # (profile only) Arch: delete and re-create the pacman keyring (HIGH risk)
+speedtest = false         # (profile only)
 
 [packages]
 groups = ["essentials"]   # essentials media cyber remote privacy power ("base" is always installed)
-extra = []                # more package names; unknown names are reported, never guessed
+extra = []                # (profile only) more package names; unknown names are reported, never guessed
 custom_file = ""          # e.g. "legacy/v2.5/pacs.txt" (one or more names per line, # comments)
-flatpak_fallback = true   # Flathub when the distro does not package it
-aur_helper = "yay"        # yay | paru
+flatpak_fallback = true   # (profile only) Flathub when the distro does not package it
+aur_helper = "yay"        # (profile only) yay | paru
 
 [gnome]
 debloat = false           # remove Tour, Weather, Maps, Contacts, Music, Web
@@ -38,11 +38,11 @@ debloat = false           # remove Tour, Weather, Maps, Contacts, Music, Web
 [wallpaper]
 mode = "none"             # none = solid black | file
 file = ""                 # used with mode = "file"
-repo = ""                 # optional private wallpaper repository
+repo = ""                 # (profile only) optional private wallpaper repository
 
 [display]
 prefer = "resolution"     # resolution | refresh — when both maxima cannot coexist
-# The layout: written by `linop display capture`, or by hand:
+# The layout (profile only): written by `linop display capture`, or by hand:
 # [[display.monitor]]
 # id = "SAM Odyssey H1"   # vendor product serial, see `linop display show`
 # position = "0,0"
@@ -75,8 +75,8 @@ opensnitch = false
 usbguard = false          # typed confirmation
 
 [optimization]
-items = ["fstrim", "bluetooth", "zram", "ananicy"]
+items = ["fstrim", "bluetooth", "zram", "ananicy"]   # (profile only)
 
 [cleanup]
-orphans = true
+orphans = true            # (profile only)
 cache = "trim"            # trim (keep 2 versions) | none | purge (pacman -Scc)
